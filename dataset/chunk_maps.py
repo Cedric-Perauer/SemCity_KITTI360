@@ -5,6 +5,20 @@ from collections import Counter
 import numpy as np
 import math
 from kitti360scripts.helpers.ply import parse_header
+import yaml
+import random
+
+vis_list = []
+
+invalid_color = [0.5019607843137255, 0.5019607843137255, 0.5019607843137255]
+
+voxel_size = 0.1  # Adjust the voxel size as needed
+aggregated_pcd = None
+vis_list = []
+valid_formats = {'ascii': '', 'binary_big_endian': '>',
+                 'binary_little_endian': '<'}
+                 
+                 
 
 
 def load_kitti_poses(file_path):
@@ -26,16 +40,34 @@ def load_kitti_poses(file_path):
             poses.append(pose)
     return poses
 
+def generate_random_colors(N, seed=0):
+    colors = set()  # Use a set to store unique colors
+    while len(colors) < N:  # Keep generating colors until we have N unique ones
+        # Generate a random color and add it to the set
+        colors.add((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
-file_path = '/media/cedric/Datasets2/KITTI_360/data_poses/2013_05_28_drive_0000_sync/poses.txt'
-poses = load_kitti_poses(file_path)
+    return list(colors)  # Convert the set to a list before returning
 
-pcd_dir = '/media/cedric/Datasets2/KITTI_360/data_3d/train/2013_05_28_drive_0000_sync/static/'
-pcds = os.listdir(pcd_dir)
-pcds = [i for i in pcds if i.endswith('.ply')]
+colors_gen = generate_random_colors(100)
+def color_point_cloud_by_labels(point_cloud, labels):
+    """
+    Colors a point cloud based on the provided labels and label colors.
 
+    Args:
+        point_cloud (open3d.geometry.PointCloud): The input point cloud.
+        labels (numpy.ndarray): An array of labels corresponding to each point in the point cloud.
+        label_colors (dict): A dictionary mapping each label to its corresponding RGB color.
 
-# Function to extract the starting number from the filename
+    Returns:
+        open3d.geometry.PointCloud: The colored point cloud.
+    """
+    colors = np.zeros((len(labels), 3))
+    for idx,label in enumerate(np.unique(labels)):
+        mask_idcs = np.where(labels == label)
+        colors[mask_idcs] = colors_gen[idx]
+    point_cloud.colors = o3d.utility.Vector3dVector(colors/255.)
+    return point_cloud
+
 
 def extract_start_number(filename):
     start_number = filename.split('_')[0]
@@ -72,21 +104,39 @@ def are_points_inside_obb(points, obb):
 
     return inside
 
+def extract_points(poses,pose,aggregated_pcd,cur_idx):
+    pos_pcd = poses[cur_idx+1][:3, -1]
+    pos_last = pose[:3, -1]
+    direction_vector = pos_pcd - pos_last
 
-pcds = sorted(pcds, key=extract_start_number)
+    direction_vector_normalized = direction_vector / \
+        np.linalg.norm(direction_vector)
 
-vis_list = []
+    y_axis = direction_vector_normalized
+    z_axis = np.array([0, 0, 1]) if np.abs(
+        y_axis[1]) != 1 else np.array([1, 0, 0])
+    x_axis = np.cross(y_axis, z_axis)
+    x_axis_normalized = x_axis / np.linalg.norm(x_axis)
+    z_axis = np.cross(x_axis_normalized, y_axis)
+    z_axis_normalized = z_axis / np.linalg.norm(z_axis)
 
-invalid_color = [0.5019607843137255, 0.5019607843137255, 0.5019607843137255]
+    # Construct the rotation matrix
+    rotation_matrix = np.vstack(
+        [x_axis_normalized, y_axis, z_axis_normalized]).T
 
-voxel_size = 0.1  # Adjust the voxel size as needed
-aggregated_pcd = None
-vis_list = []
-valid_formats = {'ascii': '', 'binary_big_endian': '>',
-                 'binary_little_endian': '<'}
+    center = pos_pcd
+    extents = np.array([40, 40, 40])  # Adjust these values as needed
 
-for i, pcd_f in tqdm(enumerate(pcds[:1])):
-    pcd = o3d.io.read_point_cloud(pcd_dir + pcd_f)
+    obb2 = o3d.geometry.OrientedBoundingBox(
+        center, rotation_matrix, extents)
+
+    points = np.asarray(aggregated_pcd.points)
+    boolean_arr = are_points_inside_obb(points, obb2)
+    ids = np.where(boolean_arr == 1)[0]
+    return ids
+
+def get_ply_data(pcd_dir,pcd_f):
+
     with open(pcd_dir + pcd_f, 'rb') as plyfile:
         if b'ply' not in plyfile.readline():
             raise ValueError('The file does not start whith the word ply')
@@ -99,105 +149,72 @@ for i, pcd_f in tqdm(enumerate(pcds[:1])):
         num_points, properties = parse_header(plyfile, ext)
 
         data = np.fromfile(plyfile, dtype=properties, count=num_points)
+        return data
 
+base_path = '/media/cedric/Datasets2/KITTI_360/data_poses/'
+folders = os.listdir(base_path)
+folder_pths = [base_path + folder for folder in folders if os.path.isdir(base_path + folder)]
+
+for folder in folder_pths :
+    poses = load_kitti_poses(folder + '/poses.txt')
+    pcd_dir = folder.replace('data_poses','data_3d/train') + '/static/'
+    pcds = os.listdir(pcd_dir)
+    pcds = [i for i in pcds if i.endswith('.ply')]
+    pcds = sorted(pcds, key=extract_start_number)
+    folders = os.listdir()
     semIDs, instanceIDs = [], []
-    for j in range(data.shape[0]):
-        semIDs.append(data[j][5])
-        instanceIDs.append(data[j][6])
-
-    colors = np.asarray(pcd.colors)
-
-    color_condition = np.all(colors != invalid_color, axis=1)
-    color_indices = np.where(color_condition)[0]
-    pcd.points = o3d.utility.Vector3dVector(
-        np.asarray(pcd.points)[color_indices])
-    pcd.colors = o3d.utility.Vector3dVector(
-        np.asarray(pcd.colors)[color_indices])
-    if i == 0:
-        aggregated_pcd = pcd
-    else:
-        aggregated_pcd += pcd
-
-vis_list.append(aggregated_pcd)
-dist_travelled = 0
-last_extracted = None
-dist_threshold = 10
-
-cur_idx = 20
-dim = 38
-
-for pose in poses[20:300]:
-    cur_pose = pose[:2, -1]  # discard the z axis
-    if last_extracted is not None:
-        dist_travelled = np.linalg.norm(cur_pose-last_extracted)
-
-    if last_extracted is None or dist_travelled > dist_threshold:
-        last_extracted = cur_pose
-        sphere = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
-        sphere.compute_vertex_normals()
-        sphere.paint_uniform_color([0.1, 0.1, 0.7])  # Paint the sphere blue
-        translation_vector = pose[:3, -1]
-        sphere.translate(translation_vector)
-        vis_list.append(sphere)
-        '''
-        bounding_box = o3d.geometry.AxisAlignedBoundingBox(
-            min_bound=[translation_vector[0] - 19,
-                       translation_vector[1] - 19, translation_vector[2] - 19],
-            max_bound=[translation_vector[0] + 19,
-                       translation_vector[1] + 19, translation_vector[2] + 19]
-        )
-        points_within_bounding_box = aggregated_pcd.crop(bounding_box)
-        o3d.visualization.draw_geometries([points_within_bounding_box])
-        '''
-        pos_pcd = poses[cur_idx+1][:3, -1]
-        pos_last = pose[:3, -1]
-        direction_vector = pos_pcd - pos_last
-
-        direction_vector_normalized = direction_vector / \
-            np.linalg.norm(direction_vector)
-
-        y_axis = direction_vector_normalized
-        z_axis = np.array([0, 0, 1]) if np.abs(
-            y_axis[1]) != 1 else np.array([1, 0, 0])
-        # Ensure z_axis is orthogonal to y_axis
-        x_axis = np.cross(y_axis, z_axis)
-        x_axis_normalized = x_axis / np.linalg.norm(x_axis)
-        # Recompute z_axis to ensure orthogonality
-        z_axis = np.cross(x_axis_normalized, y_axis)
-        z_axis_normalized = z_axis / np.linalg.norm(z_axis)
-
-        # Construct the rotation matrix
-        rotation_matrix = np.vstack(
-            [x_axis_normalized, y_axis, z_axis_normalized]).T
-
-        # Calculate the center of the OBB (midpoint between start and end poses)
-        center = pos_pcd
-
-        # Define the extents of the OBB (length, width, height)
-        extents = np.array([40, 40, 40])  # Adjust these values as needed
-
-        # Create an Oriented Bounding Box (OBB)
-        obb2 = o3d.geometry.OrientedBoundingBox(
-            center, rotation_matrix, extents)
-
-        points = np.asarray(aggregated_pcd.points)
-        boolean_arr = are_points_inside_obb(points, obb2)
-        ids = np.where(boolean_arr == 1)[0]
-
-        pcd = aggregated_pcd.select_by_index(ids)
-
-        spherec = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
-        spherec.compute_vertex_normals()
-        spherec.paint_uniform_color([0.1, 0.1, 0.7])  # Paint the sphere blue
-        translation_vector = pose[:3, -1]
-        spherec.translate(translation_vector)
-
-        spheren = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
-        spheren.compute_vertex_normals()
-        spheren.paint_uniform_color([0.1, 0.1, 0.7])  # Paint the sphere blue
-        translation_vector = poses[cur_idx+1][:3, -1]
-        spheren.translate(translation_vector)
-
-        o3d.visualization.draw_geometries([pcd, obb2, spherec, spheren])
-
-    cur_idx += 1
+    for i, pcd_f in tqdm(enumerate(pcds[:1])):
+        print(pcd_f)
+        data = get_ply_data(pcd_dir,pcd_f)
+        curSems = []
+        curInsts = []
+        points = []
+        rgb = []
+        for j in range(data.shape[0]):
+            curSems.append(data[j][6])
+            curInsts.append(data[j][7])
+            points.append([data[j][0], data[j][1], data[j][2]])
+            rgb.append([data[j][3], data[j][4], data[j][5]])
+        curSems = np.array(curSems)
+        curInsts = np.array(curInsts)
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(np.array(points))
+        pcd.colors = o3d.utility.Vector3dVector(np.array(rgb)/255.)
+        colors = np.asarray(pcd.colors)
+        color_condition = np.all(colors != invalid_color, axis=1)
+        color_indices = np.where(color_condition)[0]
+        pcd.points = o3d.utility.Vector3dVector(
+            np.asarray(pcd.points)[color_indices])
+        pcd.colors = o3d.utility.Vector3dVector(
+            np.asarray(pcd.colors)[color_indices])
+        curSems = curSems[color_indices]
+        semIDs += curSems.tolist()
+        if i == 0:
+            aggregated_pcd = pcd
+        else:
+            aggregated_pcd += pcd
+    vis_list.append(aggregated_pcd)
+    dist_travelled = 0
+    last_extracted = None
+    dist_threshold = 10
+    cur_idx = 20
+    semIDs = np.array(semIDs)
+    o3d.visualization.draw_geometries([aggregated_pcd])
+    
+    for pose in poses[cur_idx:1000]:
+        cur_pose = pose[:2, -1]  # discard the z axis
+        if last_extracted is not None:
+            dist_travelled = np.linalg.norm(cur_pose-last_extracted)
+    
+        if last_extracted is None or dist_travelled > dist_threshold:
+            last_extracted = cur_pose
+            ids = extract_points(poses,pose,aggregated_pcd,cur_idx)
+            pcd = aggregated_pcd.select_by_index(ids)
+            cur_sem = semIDs[ids]
+            colors = np.asarray(pcd.colors)
+            points = np.asarray(pcd.points)
+            o3d.visualization.draw_geometries([pcd])
+    
+    
+    
+        cur_idx += 1
