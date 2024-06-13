@@ -17,8 +17,6 @@ aggregated_pcd = None
 vis_list = []
 valid_formats = {'ascii': '', 'binary_big_endian': '>',
                  'binary_little_endian': '<'}
-                 
-                 
 
 
 def load_kitti_poses(file_path):
@@ -40,15 +38,20 @@ def load_kitti_poses(file_path):
             poses.append(pose)
     return poses
 
+
 def generate_random_colors(N, seed=0):
     colors = set()  # Use a set to store unique colors
     while len(colors) < N:  # Keep generating colors until we have N unique ones
         # Generate a random color and add it to the set
-        colors.add((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+        colors.add((random.randint(0, 255), random.randint(
+            0, 255), random.randint(0, 255)))
 
     return list(colors)  # Convert the set to a list before returning
 
+
 colors_gen = generate_random_colors(100)
+
+
 def color_point_cloud_by_labels(point_cloud, labels):
     """
     Colors a point cloud based on the provided labels and label colors.
@@ -62,7 +65,7 @@ def color_point_cloud_by_labels(point_cloud, labels):
         open3d.geometry.PointCloud: The colored point cloud.
     """
     colors = np.zeros((len(labels), 3))
-    for idx,label in enumerate(np.unique(labels)):
+    for idx, label in enumerate(np.unique(labels)):
         mask_idcs = np.where(labels == label)
         colors[mask_idcs] = colors_gen[idx]
     point_cloud.colors = o3d.utility.Vector3dVector(colors/255.)
@@ -104,7 +107,8 @@ def are_points_inside_obb(points, obb):
 
     return inside
 
-def extract_points(poses,pose,aggregated_pcd,cur_idx):
+
+def extract_points(poses, pose, aggregated_pcd, cur_idx):
     pos_pcd = poses[cur_idx+1][:3, -1]
     pos_last = pose[:3, -1]
     direction_vector = pos_pcd - pos_last
@@ -135,7 +139,8 @@ def extract_points(poses,pose,aggregated_pcd,cur_idx):
     ids = np.where(boolean_arr == 1)[0]
     return ids
 
-def get_ply_data(pcd_dir,pcd_f):
+
+def get_ply_data(pcd_dir, pcd_f):
 
     with open(pcd_dir + pcd_f, 'rb') as plyfile:
         if b'ply' not in plyfile.readline():
@@ -151,21 +156,24 @@ def get_ply_data(pcd_dir,pcd_f):
         data = np.fromfile(plyfile, dtype=properties, count=num_points)
         return data
 
+
 base_path = '/media/cedric/Datasets2/KITTI_360/data_poses/'
 folders = os.listdir(base_path)
-folder_pths = [base_path + folder for folder in folders if os.path.isdir(base_path + folder)]
+folder_pths = [
+    base_path + folder for folder in folders if os.path.isdir(base_path + folder)]
+folder_pths.sort()
 
-for folder in folder_pths :
+for folder in folder_pths:
     poses = load_kitti_poses(folder + '/poses.txt')
-    pcd_dir = folder.replace('data_poses','data_3d/train') + '/static/'
+    pcd_dir = folder.replace('data_poses', 'data_3d/train') + '/static/'
     pcds = os.listdir(pcd_dir)
     pcds = [i for i in pcds if i.endswith('.ply')]
     pcds = sorted(pcds, key=extract_start_number)
     folders = os.listdir()
     semIDs, instanceIDs = [], []
-    for i, pcd_f in tqdm(enumerate(pcds[:1])):
-        print(pcd_f)
-        data = get_ply_data(pcd_dir,pcd_f)
+    i = 0
+    for pcd_f in tqdm(pcds[:1]):
+        data = get_ply_data(pcd_dir, pcd_f)
         curSems = []
         curInsts = []
         points = []
@@ -193,28 +201,28 @@ for folder in folder_pths :
             aggregated_pcd = pcd
         else:
             aggregated_pcd += pcd
+        i += 1
+
     vis_list.append(aggregated_pcd)
     dist_travelled = 0
     last_extracted = None
     dist_threshold = 10
-    cur_idx = 20
+    cur_idx = 0
     semIDs = np.array(semIDs)
     o3d.visualization.draw_geometries([aggregated_pcd])
-    
-    for pose in poses[cur_idx:1000]:
+
+    for pose in poses[cur_idx:]:
         cur_pose = pose[:2, -1]  # discard the z axis
         if last_extracted is not None:
             dist_travelled = np.linalg.norm(cur_pose-last_extracted)
-    
+
         if last_extracted is None or dist_travelled > dist_threshold:
             last_extracted = cur_pose
-            ids = extract_points(poses,pose,aggregated_pcd,cur_idx)
+            ids = extract_points(poses, pose, aggregated_pcd, cur_idx)
             pcd = aggregated_pcd.select_by_index(ids)
             cur_sem = semIDs[ids]
             colors = np.asarray(pcd.colors)
             points = np.asarray(pcd.points)
             o3d.visualization.draw_geometries([pcd])
-    
-    
-    
+
         cur_idx += 1
