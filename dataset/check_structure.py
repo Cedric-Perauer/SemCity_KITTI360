@@ -175,7 +175,6 @@ points = np.column_stack(voxel_indices)
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(points/10)
 pcd = color_point_cloud_by_labels(pcd,labels,semkittiyaml)
-import pdb; pdb.set_trace()
 # Create a voxel grid from the point cloud
 voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=0.1)
 
