@@ -4,6 +4,7 @@ from tqdm import tqdm
 from collections import Counter
 import numpy as np
 import math
+from kitti360scripts.helpers.ply import parse_header
 
 
 def load_kitti_poses(file_path):
@@ -28,6 +29,7 @@ def load_kitti_poses(file_path):
 
 file_path = '/media/cedric/Datasets2/KITTI_360/data_poses/2013_05_28_drive_0000_sync/poses.txt'
 poses = load_kitti_poses(file_path)
+
 pcd_dir = '/media/cedric/Datasets2/KITTI_360/data_3d/train/2013_05_28_drive_0000_sync/static/'
 pcds = os.listdir(pcd_dir)
 pcds = [i for i in pcds if i.endswith('.ply')]
@@ -39,34 +41,35 @@ def extract_start_number(filename):
     start_number = filename.split('_')[0]
     return int(start_number)
 
+
 def are_points_inside_obb(points, obb):
     """
     Vectorized check if multiple points are inside the OBB by transforming the points into the OBB's local coordinate system.
-    
+
     Args:
     - points: Nx3 numpy array of points.
     - obb: An OBB object with attributes 'center', 'R', and 'extent'.
-    
+
     Returns:
     - A boolean array indicating whether each point is inside the OBB.
     """
     # Translate the points to the OBB's local origin
     local_points = points - obb.center
-    
+
     # Initialize a boolean array to keep track of points inside the OBB
     inside = np.ones(local_points.shape[0], dtype=bool)
-    
+
     # Project the translated points onto the OBB's local axes and check extents
     for i in range(3):
         axis = np.array(obb.R[:, i])
         extent = obb.extent[i] / 2.0
-        
+
         # Calculate the projection of each point onto the current axis
         projection = np.dot(local_points, axis)
-        
+
         # Update 'inside' to False for points outside the OBB's extent on this axis
         inside &= np.abs(projection) <= extent
-    
+
     return inside
 
 
@@ -79,8 +82,28 @@ invalid_color = [0.5019607843137255, 0.5019607843137255, 0.5019607843137255]
 voxel_size = 0.1  # Adjust the voxel size as needed
 aggregated_pcd = None
 vis_list = []
-for i, pcd in tqdm(enumerate(pcds[:1])):
-    pcd = o3d.io.read_point_cloud(pcd_dir + pcd)
+valid_formats = {'ascii': '', 'binary_big_endian': '>',
+                 'binary_little_endian': '<'}
+
+for i, pcd_f in tqdm(enumerate(pcds[:1])):
+    pcd = o3d.io.read_point_cloud(pcd_dir + pcd_f)
+    with open(pcd_dir + pcd_f, 'rb') as plyfile:
+        if b'ply' not in plyfile.readline():
+            raise ValueError('The file does not start whith the word ply')
+
+        fmt = plyfile.readline().split()[1].decode()
+        if fmt == "ascii":
+            raise ValueError('The file is not binary')
+
+        ext = valid_formats[fmt]
+        num_points, properties = parse_header(plyfile, ext)
+
+        data = np.fromfile(plyfile, dtype=properties, count=num_points)
+
+    semIDs, instanceIDs = [], []
+    for j in range(data.shape[0]):
+        semIDs.append(data[j][5])
+        instanceIDs.append(data[j][6])
 
     colors = np.asarray(pcd.colors)
 
@@ -126,38 +149,41 @@ for pose in poses[20:300]:
         points_within_bounding_box = aggregated_pcd.crop(bounding_box)
         o3d.visualization.draw_geometries([points_within_bounding_box])
         '''
-        pos_pcd = poses[cur_idx+1][:3,-1]
-        pos_last = pose[:3,-1]
+        pos_pcd = poses[cur_idx+1][:3, -1]
+        pos_last = pose[:3, -1]
         direction_vector = pos_pcd - pos_last
 
-        direction_vector_normalized = direction_vector / np.linalg.norm(direction_vector)
-        
+        direction_vector_normalized = direction_vector / \
+            np.linalg.norm(direction_vector)
+
         y_axis = direction_vector_normalized
-        z_axis = np.array([0, 0, 1]) if np.abs(y_axis[1]) != 1 else np.array([1, 0, 0])
+        z_axis = np.array([0, 0, 1]) if np.abs(
+            y_axis[1]) != 1 else np.array([1, 0, 0])
         # Ensure z_axis is orthogonal to y_axis
         x_axis = np.cross(y_axis, z_axis)
         x_axis_normalized = x_axis / np.linalg.norm(x_axis)
         # Recompute z_axis to ensure orthogonality
         z_axis = np.cross(x_axis_normalized, y_axis)
         z_axis_normalized = z_axis / np.linalg.norm(z_axis)
-        
+
         # Construct the rotation matrix
-        rotation_matrix = np.vstack([x_axis_normalized, y_axis, z_axis_normalized]).T
-        
-        
+        rotation_matrix = np.vstack(
+            [x_axis_normalized, y_axis, z_axis_normalized]).T
+
         # Calculate the center of the OBB (midpoint between start and end poses)
         center = pos_pcd
-        
+
         # Define the extents of the OBB (length, width, height)
-        extents = np.array([40,40,40])  # Adjust these values as needed
-        
+        extents = np.array([40, 40, 40])  # Adjust these values as needed
+
         # Create an Oriented Bounding Box (OBB)
-        obb2 = o3d.geometry.OrientedBoundingBox(center, rotation_matrix, extents)
-        
+        obb2 = o3d.geometry.OrientedBoundingBox(
+            center, rotation_matrix, extents)
+
         points = np.asarray(aggregated_pcd.points)
-        boolean_arr = are_points_inside_obb(points,obb2)
+        boolean_arr = are_points_inside_obb(points, obb2)
         ids = np.where(boolean_arr == 1)[0]
-        
+
         pcd = aggregated_pcd.select_by_index(ids)
 
         spherec = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
@@ -165,13 +191,13 @@ for pose in poses[20:300]:
         spherec.paint_uniform_color([0.1, 0.1, 0.7])  # Paint the sphere blue
         translation_vector = pose[:3, -1]
         spherec.translate(translation_vector)
-        
+
         spheren = o3d.geometry.TriangleMesh.create_sphere(radius=1.0)
         spheren.compute_vertex_normals()
         spheren.paint_uniform_color([0.1, 0.1, 0.7])  # Paint the sphere blue
         translation_vector = poses[cur_idx+1][:3, -1]
         spheren.translate(translation_vector)
-        
-        o3d.visualization.draw_geometries([pcd,obb2,spherec,spheren])
-    
+
+        o3d.visualization.draw_geometries([pcd, obb2, spherec, spheren])
+
     cur_idx += 1
