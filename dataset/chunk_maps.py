@@ -162,6 +162,9 @@ folders = os.listdir(base_path)
 folder_pths = [
     base_path + folder for folder in folders if os.path.isdir(base_path + folder)]
 folder_pths.sort()
+out_dir = '/media/cedric/Datasets2/KITTI_360/preprocessed/'
+if os.path.exists(out_dir) is False:
+    os.makedirs(out_dir)
 
 for folder in folder_pths:
     poses = load_kitti_poses(folder + '/poses.txt')
@@ -172,7 +175,7 @@ for folder in folder_pths:
     folders = os.listdir()
     semIDs, instanceIDs = [], []
     i = 0
-    for pcd_f in tqdm(pcds[:1]):
+    for pcd_f in tqdm(pcds):
         data = get_ply_data(pcd_dir, pcd_f)
         curSems = []
         curInsts = []
@@ -209,9 +212,8 @@ for folder in folder_pths:
     dist_threshold = 10
     cur_idx = 0
     semIDs = np.array(semIDs)
-    o3d.visualization.draw_geometries([aggregated_pcd])
 
-    for pose in poses[cur_idx:]:
+    for pose in tqdm(poses[cur_idx:]):
         cur_pose = pose[:2, -1]  # discard the z axis
         if last_extracted is not None:
             dist_travelled = np.linalg.norm(cur_pose-last_extracted)
@@ -219,10 +221,25 @@ for folder in folder_pths:
         if last_extracted is None or dist_travelled > dist_threshold:
             last_extracted = cur_pose
             ids = extract_points(poses, pose, aggregated_pcd, cur_idx)
+            if ids.shape[0] < 300000:
+                continue
             pcd = aggregated_pcd.select_by_index(ids)
+            pts = np.asarray(pcd.points)
+            dim_x, dim_y = abs(
+                pts[:, 0].min() - pts[:, 0].max()), abs(pts[:, 1].min() - pts[:, 1].max())
+            if dim_x < 25 or dim_y < 25:
+                continue
             cur_sem = semIDs[ids]
             colors = np.asarray(pcd.colors)
             points = np.asarray(pcd.points)
-            o3d.visualization.draw_geometries([pcd])
+            # o3d.visualization.draw_geometries([pcd])
+            # pcd = color_point_cloud_by_labels(pcd,cur_sem)
+            # o3d.visualization.draw_geometries([pcd])
+            # do some storing of data here
+            cur_out_dir = out_dir + folder.split('/')[-1] + '/'
+            if os.path.exists(cur_out_dir) is False:
+                os.makedirs(cur_out_dir)
+            cur_out_fn = cur_out_dir + f'{cur_idx}.npz'
+            np.savez(cur_out_fn, semantics=cur_sem, xyz=points, colors=colors)
 
         cur_idx += 1
