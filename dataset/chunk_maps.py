@@ -177,7 +177,7 @@ for folder in folder_pths:
     folders = os.listdir()
     semIDs, instanceIDs = [], []
     i = 0
-    for pcd_f in tqdm(pcds):
+    for pcd_f in tqdm(pcds[:10]):
         data = get_ply_data(pcd_dir, pcd_f)
         curSems = []
         curInsts = []
@@ -242,6 +242,31 @@ for folder in folder_pths:
             if os.path.exists(cur_out_dir) is False:
                 os.makedirs(cur_out_dir)
             cur_out_fn = cur_out_dir + f'{cur_idx}.npz'
-            np.savez(cur_out_fn, semantics=cur_sem, xyz=points, colors=colors,cur_pose=pose,next_pose=poses[cur_idx+1])
+            np.savez(cur_out_fn, semantics=cur_sem, xyz=points,
+                    colors=colors, cur_pose=pose, next_pose=poses[cur_idx+1])
+
+            bounding_box_size = [
+                38,
+                38,
+                38
+            ]
+            # Define the size of the bounding box
+            # Create the axis-aligned bounding box (AABB) around the current pose
+            aabb = o3d.geometry.AxisAlignedBoundingBox(
+                min_bound=cur_pose - np.array(bounding_box_size) / 2,
+                max_bound=cur_pose + np.array(bounding_box_size) / 2
+            )
+            indices_in_aabb = aabb.get_point_indices_within_bounding_box(
+                aggregated_pcd.points)
+
+            pcd_in_aabb = pcd.select_by_index(indices_in_aabb)
+            o3d.visualization.draw_geometries([pcd_in_aabb])
+
+            pts = np.asarray(aggregated_pcd.points)[indices_in_aabb]
+            curSems = semIDs[indices_in_aabb]
+            colors = np.asarray(aggregated_pcd.colors)[indices_in_aabb]
+            cur_out_fn = cur_out_dir + f'{cur_idx}_axis_aligned.npz'
+            np.savez(cur_out_fn, semantics=curSems, xyz=pts,
+                    colors=colors, cur_pose=pose, next_pose=poses[cur_idx+1])
 
         cur_idx += 1
