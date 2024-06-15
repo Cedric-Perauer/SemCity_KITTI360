@@ -253,14 +253,14 @@ for folder in folder_pths:
             # Define the size of the bounding box
             # Create the axis-aligned bounding box (AABB) around the current pose
             aabb = o3d.geometry.AxisAlignedBoundingBox(
-                min_bound=cur_pose - np.array(bounding_box_size) / 2,
-                max_bound=cur_pose + np.array(bounding_box_size) / 2
+                min_bound=pose[:3,-1] - np.array(bounding_box_size) / 2,
+                max_bound=pose[:3,-1] + np.array(bounding_box_size) / 2
             )
             indices_in_aabb = aabb.get_point_indices_within_bounding_box(
                 aggregated_pcd.points)
 
-            pcd_in_aabb = pcd.select_by_index(indices_in_aabb)
-            o3d.visualization.draw_geometries([pcd_in_aabb])
+            pcd_in_aabb = aggregated_pcd.select_by_index(indices_in_aabb)
+            #o3d.visualization.draw_geometries([pcd_in_aabb])
 
             pts = np.asarray(aggregated_pcd.points)[indices_in_aabb]
             curSems = semIDs[indices_in_aabb]
