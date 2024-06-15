@@ -80,6 +80,8 @@ class KITTI360(data.Dataset):
             # Extract voxel indices and centers
             voxel_indices = np.array(
                 [voxel.grid_index for voxel in voxel_grid.get_voxels()])
+            voxel_colors = np.array(
+                [voxel.color for voxel in voxel_grid.get_voxels()])
             voxel_centers = np.array([voxel_grid.origin + voxel.grid_index *
                                      voxel_grid.voxel_size for voxel in voxel_grid.get_voxels()])
 
@@ -118,6 +120,7 @@ class KITTI360(data.Dataset):
             xyz_center = voxel_indices
             voxel_label = voxel_label.reshape((-1, 1))
             query = normalized_voxel_centers
+            colors = voxel_colors
             break
             ### query = tnd !!!
 
