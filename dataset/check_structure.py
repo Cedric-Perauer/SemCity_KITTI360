@@ -5,7 +5,7 @@ from scipy.ndimage import distance_transform_edt
 import yaml
 import open3d as o3d
 
-path = '/media/cedric/Datasets2/data_odometry_voxels_all/dataset/sequences/07/voxels/'
+path = '/media/cedric/Datasets2/data_odometry_voxels_all/sequences/07/voxels/'
 yaml_path = 'semantic-kitti.yaml'
 fs = os.listdir(path)
 fs = [f for f in fs if f.endswith('label')]
@@ -118,7 +118,6 @@ def unpack(compressed):
     return uncompressed
 
 
-
 cur_file = path + fs[1]
 voxel_label = np.fromfile(cur_file, dtype=np.uint16).reshape(
     (-1, 1))  # voxel labels
@@ -154,29 +153,33 @@ if p == 6:
 
 
 def point2voxel(preds, coords):
-    grid_size = (1,256,256,32)
-    output = torch.zeros((preds.shape[0], grid_size[1], grid_size[2], grid_size[3]), device=preds.device).type(torch.LongTensor)
+    grid_size = (1, 256, 256, 32)
+    output = torch.zeros((preds.shape[0], grid_size[1], grid_size[2],
+                         grid_size[3]), device=preds.device).type(torch.LongTensor)
     for i in range(preds.shape[0]):
         output[i, coords[i, :, 0], coords[i, :, 1], coords[i, :, 2]] = preds[i]
     return output
 
 
 query, xyz_label, xyz_center = get_query(voxel_label)
+#import pdb; pdb.set_trace()
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(xyz_center[xyz_label != 0])
-pcd = color_point_cloud_by_labels(pcd,xyz_label[xyz_label!=0],semkittiyaml)
+pcd = color_point_cloud_by_labels(pcd, xyz_label[xyz_label != 0], semkittiyaml)
 
-voxels = point2voxel(xyz_label.type(torch.LongTensor).unsqueeze(0),xyz_center.type(torch.LongTensor).unsqueeze(0))
+voxels = point2voxel(xyz_label.type(torch.LongTensor).unsqueeze(
+    0), xyz_center.type(torch.LongTensor).unsqueeze(0))
 
 # Convert the grid to a point cloud
 voxel_indices = np.where(voxels[0] != 0)
-labels = voxels[voxels!=0]
+labels = voxels[voxels != 0]
 points = np.column_stack(voxel_indices)
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(points/10)
-pcd = color_point_cloud_by_labels(pcd,labels,semkittiyaml)
+pcd = color_point_cloud_by_labels(pcd, labels, semkittiyaml)
 # Create a voxel grid from the point cloud
-voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=0.1)
+voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(
+    pcd, voxel_size=0.04)
 
 # Visualize the voxel grid
 o3d.visualization.draw_geometries([voxel_grid])

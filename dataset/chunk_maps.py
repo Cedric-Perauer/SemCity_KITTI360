@@ -162,6 +162,8 @@ folders = os.listdir(base_path)
 folder_pths = [
     base_path + folder for folder in folders if os.path.isdir(base_path + folder)]
 folder_pths.sort()
+min_points = 400000
+
 out_dir = '/media/cedric/Datasets2/KITTI_360/preprocessed/'
 if os.path.exists(out_dir) is False:
     os.makedirs(out_dir)
@@ -221,7 +223,7 @@ for folder in folder_pths:
         if last_extracted is None or dist_travelled > dist_threshold:
             last_extracted = cur_pose
             ids = extract_points(poses, pose, aggregated_pcd, cur_idx)
-            if ids.shape[0] < 300000:
+            if ids.shape[0] < min_points:
                 continue
             pcd = aggregated_pcd.select_by_index(ids)
             pts = np.asarray(pcd.points)
@@ -240,6 +242,6 @@ for folder in folder_pths:
             if os.path.exists(cur_out_dir) is False:
                 os.makedirs(cur_out_dir)
             cur_out_fn = cur_out_dir + f'{cur_idx}.npz'
-            np.savez(cur_out_fn, semantics=cur_sem, xyz=points, colors=colors)
+            np.savez(cur_out_fn, semantics=cur_sem, xyz=points, colors=colors,cur_pose=pose,next_pose=poses[cur_idx+1])
 
         cur_idx += 1
