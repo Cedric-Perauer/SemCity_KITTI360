@@ -49,7 +49,6 @@ def write_result(args):
         f.write(str(args_table))
 
 def point2voxel(args, preds, coords):
-    import pdb; pdb.set_trace()
     if len(args.grid_size)==4:
         output = torch.zeros((preds.shape[0], args.grid_size[1], args.grid_size[2], args.grid_size[3]), device=preds.device)
     else :
