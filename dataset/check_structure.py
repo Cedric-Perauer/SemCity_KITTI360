@@ -162,7 +162,6 @@ def point2voxel(preds, coords):
 
 
 query, xyz_label, xyz_center = get_query(voxel_label)
-import pdb; pdb.set_trace()
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(xyz_center[xyz_label != 0])
 pcd = color_point_cloud_by_labels(pcd, xyz_label[xyz_label != 0], semkittiyaml)

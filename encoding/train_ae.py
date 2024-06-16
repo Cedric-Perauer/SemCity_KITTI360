@@ -186,7 +186,7 @@ class Trainer:
 
             idx = path[0].split('/')[-1].split('.')[0]
             folder = path[0].split('/')[-3]
-            save_remap_lut(self.args, output, folder, idx, self.train_dataset.learning_map_inv, True)
+            #save_remap_lut(self.args, output, folder, idx, self.train_dataset.learning_map_inv, True)
 
         # eval for all validation samples
         _, class_jaccard = evaluator.getIoU()

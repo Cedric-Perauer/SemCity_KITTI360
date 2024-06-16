@@ -2,7 +2,7 @@ import os
 
 # manual definition
 PROJECT_NAMES = 'SemCity' 
-SEMKITTI_DATA_PATH = '/media/cedric/Datasets2/data_odometry_voxels_all/dataset/sequences/' # the path to the sequences folder
+SEMKITTI_DATA_PATH = '/media/cedric/Datasets2/data_odometry_voxels_all/sequences/' # the path to the sequences folder
 CARLA_DATA_PATH = '' # the path to the sequences folder
 
 # auto definition
