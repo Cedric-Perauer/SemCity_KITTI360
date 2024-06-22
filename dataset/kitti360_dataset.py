@@ -199,7 +199,21 @@ class KITTI360(data.Dataset):
                         remapped_labels.append(xyzlabel)
             remapped_labels = torch.cat(remapped_labels, dim=0)
             remapped_labels = remapped_labels[:self.max_points]
-            ## need to make sure to continue here
+            import pdb; pdb.set_trace()
+            ## need to make sure to continue here, update noirmalized voxel centers
+            '''
+            voxel_indices = np.array(
+                [voxel.grid_index for voxel in voxel_grid.get_voxels()])
+            voxel_colors = np.array(
+                [voxel.color for voxel in voxel_grid.get_voxels()])
+            voxel_centers = np.array([voxel_grid.origin + voxel.grid_index *
+                                     voxel_grid.voxel_size for voxel in voxel_grid.get_voxels()])
+
+            # Normalize voxel centers to be between -1 and 1
+            voxel_dim = np.array([256, 256, 32])
+            normalized_voxel_centers = (
+                voxel_centers / (voxel_dim - 1)) * 2 - 1
+            '''
             xyz_label = np.array(remapped_labels)
             xyz_center = voxel_indices
             voxel_label = voxel_label
@@ -208,6 +222,7 @@ class KITTI360(data.Dataset):
             invalid = torch.zeros_like(torch.from_numpy(voxel_label))
             self.test_samples.append([voxel_label,query,xyz_label,xyz_center,cur_f,invalid])
             idx += 1
+            break
 
     def __len__(self):
         'Denotes the total number of samples'
