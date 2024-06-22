@@ -197,8 +197,9 @@ class KITTI360(data.Dataset):
                         xyzlabel = torch.nn.functional.pad(
                             xyz, (1, 0), 'constant', value=i)
                         remapped_labels.append(xyzlabel)
+            remapped_labels = torch.cat(remapped_labels, dim=0)
+            remapped_labels = remapped_labels[:self.max_points]
             ## need to make sure to continue here
-            import pdb; pdb.set_trace()
             xyz_label = np.array(remapped_labels)
             xyz_center = voxel_indices
             voxel_label = voxel_label
@@ -206,8 +207,6 @@ class KITTI360(data.Dataset):
             colors = voxel_colors
             invalid = torch.zeros_like(torch.from_numpy(voxel_label))
             self.test_samples.append([voxel_label,query,xyz_label,xyz_center,cur_f,invalid])
-            if idx == 5 :
-                break
             idx += 1
 
     def __len__(self):
