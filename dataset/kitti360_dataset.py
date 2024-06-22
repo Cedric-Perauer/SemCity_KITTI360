@@ -6,9 +6,9 @@ import yaml
 import torch
 import pathlib
 import random
+from tqdm import tqdm
 
 
-# Define the remapping dictionary
 remapping_dict = {
     0: 255,    # 'unlabeled' -> ignored
     1: 255,    # 'ego vehicle' -> ignored
@@ -69,7 +69,6 @@ def generate_random_colors(N, seed=0):
     return list(colors)  # Convert the set to a list before returning
 
 
-colors_gen = generate_random_colors(100)
 
 
 def color_point_cloud_by_labels(point_cloud, labels):
@@ -84,6 +83,7 @@ def color_point_cloud_by_labels(point_cloud, labels):
     Returns:
         open3d.geometry.PointCloud: The colored point cloud.
     """
+    colors_gen = generate_random_colors(100)
     colors = np.zeros((len(labels), 3))
     for idx, label in enumerate(np.unique(labels)):
         mask_idcs = np.where(labels == label)
@@ -92,16 +92,19 @@ def color_point_cloud_by_labels(point_cloud, labels):
     return point_cloud
 
 class KITTI360(data.Dataset):
-    def __init__(self, imageset='train', get_query=True):
+    def __init__(self, imageset='train', get_query=True,num_class=20):
         self.base_folder = '/media/cedric/Datasets2/KITTI_360/preprocessed/'
         subfolders = os.listdir(self.base_folder)
         subfolders = [folder for folder in subfolders if os.path.isdir(
             self.base_folder + folder)]
         self.im_idx = []
         self.test_samples = []
-        complt_num_per_class= np.asarray([7632350044, 15783539,  125136, 118809, 646799, 821951, 262978, 283696, 204750, 61688703, 4502961, 44883650, 2269923, 56840218, 15719652, 158442623, 2061623, 36970522, 1151988, 334146])
+        self.num_class = num_class
+        complt_num_per_class= np.asarray([1]*20)
         compl_labelweights = complt_num_per_class / np.sum(complt_num_per_class)
         self.weights = torch.Tensor(np.power(np.amax(compl_labelweights) / compl_labelweights, 1 / 3.0)).cuda()
+        self.min_dim = 10000000
+        self.max_points = 400000
         
         
         for folder in subfolders:
@@ -109,8 +112,9 @@ class KITTI360(data.Dataset):
             for f in fs:
                 if f.endswith('aligned.npz'):
                     self.im_idx.append(self.base_folder + folder + '/' + f)
-
-        for cur_f in self.im_idx:
+        
+        idx = 0
+        for cur_f in tqdm(self.im_idx):
             # cur_f = self.im_idx[0]
             with np.load(cur_f) as data:
                 pts = data['xyz']
@@ -171,9 +175,30 @@ class KITTI360(data.Dataset):
             voxel_label = np.zeros([256, 256, 32], dtype=int)
             for voxel_idx in voxel_indices:
                 cur_label = remapping_dict[voxel_labels[(voxel_idx[0],voxel_idx[1],voxel_idx[2])]]
-                remapped_labels.append(cur_label)
                 voxel_label[voxel_idx[0],voxel_idx[1],voxel_idx[2]] = cur_label
 
+            for i in range(1, num_class):
+                xyz = torch.nonzero(torch.Tensor(voxel_label) == i, as_tuple=False)
+                xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
+                remapped_labels.append(xyzlabel)
+
+            pt_number = normalized_voxel_centers.shape[0]
+            num_far_free = self.max_points - pt_number
+            if pt_number < self.max_points:
+                xyz = torch.nonzero(torch.from_numpy(voxel_label) == 0)
+                xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=0)
+                idx = torch.randperm(xyzlabel.shape[0])
+                xyzlabel = xyzlabel[idx][:min(xyzlabel.shape[0], num_far_free)]
+                remapped_labels.append(xyzlabel)
+                while len(torch.cat(remapped_labels, dim=0)) < self.max_points:
+                    for i in range(1, self.num_class):
+                        xyz = torch.nonzero(torch.Tensor(
+                            voxel_label) == i, as_tuple=False)
+                        xyzlabel = torch.nn.functional.pad(
+                            xyz, (1, 0), 'constant', value=i)
+                        remapped_labels.append(xyzlabel)
+            ## need to make sure to continue here
+            import pdb; pdb.set_trace()
             xyz_label = np.array(remapped_labels)
             xyz_center = voxel_indices
             voxel_label = voxel_label
@@ -181,16 +206,17 @@ class KITTI360(data.Dataset):
             colors = voxel_colors
             invalid = torch.zeros_like(torch.from_numpy(voxel_label))
             self.test_samples.append([voxel_label,query,xyz_label,xyz_center,cur_f,invalid])
-            break
-
-            ### query = tnd !!!
+            if idx == 5 :
+                break
+            idx += 1
 
     def __len__(self):
         'Denotes the total number of samples'
-        return len(self.im_idx)
+        return len(self.test_samples)
 
     def __getitem__(self, index):
-        voxel_label, query,xyz_label, xyz_center,f_name,invalid= self.test_samples[0]
+        voxel_label, query,xyz_label, xyz_center,f_name,invalid = self.test_samples[1]
+
         return voxel_label,query,xyz_label,xyz_center,f_name,invalid
 
 def flip(voxel, invalid, flip_dim=0):
