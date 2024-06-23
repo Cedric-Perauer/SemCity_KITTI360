@@ -157,7 +157,7 @@ def get_ply_data(pcd_dir, pcd_f):
         return data
 
 
-base_path = '/media/cedric/Datasets2/KITTI_360/data_poses/'
+base_path = '/media/cedric/Datasets2/KITTI_360/data_3d/train/'
 folders = os.listdir(base_path)
 folder_pths = [
     base_path + folder for folder in folders if os.path.isdir(base_path + folder)]
@@ -169,13 +169,19 @@ if os.path.exists(out_dir) is False:
     os.makedirs(out_dir)
 
 for folder in folder_pths:
-    poses = load_kitti_poses(folder + '/poses.txt')
-    pcd_dir = folder.replace('data_poses', 'data_3d/train') + '/static/'
+    poses = load_kitti_poses(folder.replace('data_3d/train/','data_poses/') + '/poses.txt')
+    pcd_dir = folder + '/static/'
     pcds = os.listdir(pcd_dir)
     pcds = [i for i in pcds if i.endswith('.ply')]
     pcds = sorted(pcds, key=extract_start_number)
     folders = os.listdir()
     semIDs, instanceIDs = [], []
+    cur_out_dir = out_dir + folder.split('/')[-1] + '/'
+    if os.path.exists(cur_out_dir) is False:
+                os.makedirs(cur_out_dir)
+    else : 
+        print("skipping completed dir",folder)
+        continue
     i = 0
     for pcd_f in tqdm(pcds):
         data = get_ply_data(pcd_dir, pcd_f)
@@ -238,9 +244,7 @@ for folder in folder_pths:
             # pcd = color_point_cloud_by_labels(pcd,cur_sem)
             # o3d.visualization.draw_geometries([pcd])
             # do some storing of data here
-            cur_out_dir = out_dir + folder.split('/')[-1] + '/'
-            if os.path.exists(cur_out_dir) is False:
-                os.makedirs(cur_out_dir)
+            
             cur_out_fn = cur_out_dir + f'{cur_idx}.npz'
             np.savez(cur_out_fn, semantics=cur_sem, xyz=points,
                     colors=colors, cur_pose=pose, next_pose=poses[cur_idx+1])
