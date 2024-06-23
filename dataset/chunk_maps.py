@@ -177,7 +177,7 @@ for folder in folder_pths:
     folders = os.listdir()
     semIDs, instanceIDs = [], []
     i = 0
-    for pcd_f in tqdm(pcds[:10]):
+    for pcd_f in tqdm(pcds):
         data = get_ply_data(pcd_dir, pcd_f)
         curSems = []
         curInsts = []

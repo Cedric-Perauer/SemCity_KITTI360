@@ -36,7 +36,7 @@ remapping_dict = {
     23: 255,   # 'sky' -> ignored
     24: 5,     # 'person' -> 'person'
     25: 6,     # 'rider' -> 'bicyclist' (assuming rider is typically on a bicycle)
-    26: 0,     # 'car' -> 'car'
+    26: 1,     # 'car' -> 'car'
     27: 3,     # 'truck' -> 'truck'
     28: 3,     # 'bus' -> 'truck'
     29: 4,     # 'caravan' -> 'other-vehicle'
@@ -149,9 +149,6 @@ class KITTI360(data.Dataset):
 
             # Normalize voxel centers to be between -1 and 1
             voxel_dim = np.array([256, 256, 32])
-            normalized_voxel_centers = (
-                voxel_centers / (voxel_dim - 1)) * 2 - 1
-
             # Initialize a dictionary to store semantic labels for each voxel
             voxel_semantics = {}
 
@@ -182,7 +179,7 @@ class KITTI360(data.Dataset):
                 xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
                 remapped_labels.append(xyzlabel)
 
-            pt_number = normalized_voxel_centers.shape[0]
+            pt_number =voxel_centers.shape[0]
             num_far_free = self.max_points - pt_number
             if pt_number < self.max_points:
                 xyz = torch.nonzero(torch.from_numpy(voxel_label) == 0)
@@ -210,7 +207,6 @@ class KITTI360(data.Dataset):
             invalid = torch.zeros_like(torch.from_numpy(voxel_label))
             self.test_samples.append([voxel_label,query,xyz_label,xyz_center,cur_f,invalid])
             idx += 1
-            break
 
     def __len__(self):
         'Denotes the total number of samples'
