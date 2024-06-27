@@ -17,38 +17,38 @@ remapping_dict = {
     4: 255,    # 'static' -> ignored
     5: 255,    # 'dynamic' -> ignored
     6: 255,    # 'ground' -> ignored
-    7: 8,      # 'road' -> 'road'
-    8: 10,     # 'sidewalk' -> 'sidewalk'
-    9: 9,      # 'parking' -> 'parking'
-    10: 11,    # 'rail track' -> 'other-ground'
-    11: 12,    # 'building' -> 'building'
-    12: 12,    # 'wall' -> 'building'
-    13: 13,    # 'fence' -> 'fence'
-    14: 13,    # 'guard rail' -> 'fence'
-    15: 12,    # 'bridge' -> 'building'
-    16: 12,    # 'tunnel' -> 'building'
-    17: 17,    # 'pole' -> 'pole'
-    18: 17,    # 'polegroup' -> 'pole'
-    19: 18,    # 'traffic light' -> 'traffic-sign'
-    20: 18,    # 'traffic sign' -> 'traffic-sign'
-    21: 14,    # 'vegetation' -> 'vegetation'
-    22: 16,    # 'terrain' -> 'terrain'
+    7: 9,      # 'road' -> 'road'
+    8: 11,     # 'sidewalk' -> 'sidewalk'
+    9: 10,      # 'parking' -> 'parking'
+    10: 12,    # 'rail track' -> 'other-ground'
+    11: 13,    # 'building' -> 'building'
+    12: 13,    # 'wall' -> 'building'
+    13: 14,    # 'fence' -> 'fence'
+    14: 14,    # 'guard rail' -> 'fence'
+    15: 8,    # 'bridge' -> 'building'
+    16: 13,    # 'tunnel' -> 'building'
+    17: 18,    # 'pole' -> 'pole'
+    18: 18,    # 'polegroup' -> 'pole'
+    19: 16,    # 'traffic light' -> 'traffic-light'
+    20: 19,    # 'traffic sign' -> 'traffic-sign'
+    21: 15,    # 'vegetation' -> 'vegetation'
+    22: 17,    # 'terrain' -> 'terrain'
     23: 255,   # 'sky' -> ignored
-    24: 5,     # 'person' -> 'person'
-    25: 6,     # 'rider' -> 'bicyclist' (assuming rider is typically on a bicycle)
+    24: 6,     # 'person' -> 'person'
+    25: 7,     # 'rider' -> 'bicyclist' (assuming rider is typically on a bicycle)
     26: 1,     # 'car' -> 'car'
-    27: 3,     # 'truck' -> 'truck'
-    28: 3,     # 'bus' -> 'truck'
-    29: 4,     # 'caravan' -> 'other-vehicle'
-    30: 4,     # 'trailer' -> 'other-vehicle'
-    31: 4,     # 'train' -> 'other-vehicle'
-    32: 2,     # 'motorcycle' -> 'motorcycle'
-    33: 1,     # 'bicycle' -> 'bicycle'
-    34: 12,    # 'garage' -> 'building'
-    35: 13,    # 'gate' -> 'fence'
+    27: 4,     # 'truck' -> 'truck'
+    28: 4,     # 'bus' -> 'truck'
+    29: 5,     # 'caravan' -> 'other-vehicle'
+    30: 5,     # 'trailer' -> 'other-vehicle'
+    31: 5,     # 'train' -> 'other-vehicle'
+    32: 3,     # 'motorcycle' -> 'motorcycle'
+    33: 2,     # 'bicycle' -> 'bicycle'
+    34: 13,    # 'garage' -> 'building'
+    35: 14,    # 'gate' -> 'fence'
     36: 255,   # 'stop' -> ignored
-    37: 17,    # 'smallpole' -> 'pole'
-    38: 17,    # 'lamp' -> 'pole'
+    37: 18,    # 'smallpole' -> 'pole'
+    38: 18,    # 'lamp' -> 'pole'
     39: 255,   # 'trash bin' -> ignored
     40: 255,   # 'vending machine' -> ignored
     41: 255,   # 'box' -> ignored
@@ -93,21 +93,23 @@ def color_point_cloud_by_labels(point_cloud, labels):
 
 class KITTI360(data.Dataset):
     def __init__(self, imageset='train', get_query=True,num_class=20):
+        self.num_class = num_class
+
+
+    def create_format(self):
         self.base_folder = '/media/cedric/Datasets2/KITTI_360/preprocessed/'
-        subfolders = os.listdir(self.base_folder)
-        subfolders = [folder for folder in subfolders if os.path.isdir(
+        self.subfolders = os.listdir(self.base_folder)
+        self.subfolders = [folder for folder in self.subfolders if os.path.isdir(
             self.base_folder + folder)]
         self.im_idx = []
         self.test_samples = []
-        self.num_class = num_class
-        complt_num_per_class= np.asarray([1]*20)
-        compl_labelweights = complt_num_per_class / np.sum(complt_num_per_class)
-        self.weights = torch.Tensor(np.power(np.amax(compl_labelweights) / compl_labelweights, 1 / 3.0)).cuda()
+        self.num_class = self.num_class
+        #self.weights = torch.Tensor(np.power(np.amax(compl_labelweights) / compl_labelweights, 1 / 3.0)).cuda()
         self.min_dim = 10000000
         self.max_points = 400000
         
-        
-        for folder in subfolders:
+        complt_num_per_class= np.asarray([0]*20)
+        for folder in self.subfolders:
             fs = os.listdir(self.base_folder + folder)
             for f in fs:
                 if f.endswith('aligned.npz'):
@@ -169,33 +171,50 @@ class KITTI360(data.Dataset):
 
             # Print the results
             remapped_labels = []
+            remapped_colors = []
             voxel_label = np.zeros([256, 256, 32], dtype=int)
-            for voxel_idx in voxel_indices:
+            voxel_colors = np.zeros([256,256,32,3],dtype=float)
+            voxels = voxel_grid.get_voxels()
+            for vox_idx,voxel_idx in enumerate(voxel_indices):
                 cur_label = remapping_dict[voxel_labels[(voxel_idx[0],voxel_idx[1],voxel_idx[2])]]
                 voxel_label[voxel_idx[0],voxel_idx[1],voxel_idx[2]] = cur_label
+                voxel_colors[voxel_idx[0],voxel_idx[1],voxel_idx[2]] = np.array(list(voxels[vox_idx].color))
 
-            for i in range(1, num_class):
+            for i in range(1, self.num_class):
                 xyz = torch.nonzero(torch.Tensor(voxel_label) == i, as_tuple=False)
                 xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
+                colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
                 remapped_labels.append(xyzlabel)
+                remapped_colors.append(colors)
 
-            pt_number =voxel_centers.shape[0]
+            pt_number = voxel_centers.shape[0]
             num_far_free = self.max_points - pt_number
+            ignore_count = self.max_points                                                                                                                                
             if pt_number < self.max_points:
                 xyz = torch.nonzero(torch.from_numpy(voxel_label) == 0)
+                colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
                 xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=0)
                 idx = torch.randperm(xyzlabel.shape[0])
                 xyzlabel = xyzlabel[idx][:min(xyzlabel.shape[0], num_far_free)]
                 remapped_labels.append(xyzlabel)
+                remapped_colors.append(colors)
                 while len(torch.cat(remapped_labels, dim=0)) < self.max_points:
                     for i in range(1, self.num_class):
                         xyz = torch.nonzero(torch.Tensor(
                             voxel_label) == i, as_tuple=False)
+                        colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
+                        remapped_colors.append(colors)
                         xyzlabel = torch.nn.functional.pad(
                             xyz, (1, 0), 'constant', value=i)
                         remapped_labels.append(xyzlabel)
+                        num_cls = xyzlabel.shape[0]
+                        complt_num_per_class[i] += num_cls
+                        ignore_count -=  num_cls
+
+            complt_num_per_class[0] += ignore_count
             remapped_labels = torch.cat(remapped_labels, dim=0)
             remapped_labels = remapped_labels[:self.max_points]
+            remapped_colors = np.concatenate(remapped_colors, axis=0)
 
             # Normalize voxel centers to be between -1 and 1
             voxel_dim = np.array([256, 256, 32])
@@ -205,7 +224,14 @@ class KITTI360(data.Dataset):
             xyz_center = remapped_labels[:,1:]
             #colors = voxel_colors
             invalid = torch.zeros_like(torch.from_numpy(voxel_label))
-            self.test_samples.append([voxel_label,query,xyz_label,xyz_center,cur_f,invalid])
+            store_file = cur_f.replace('preprocessed','semcity_format')
+            out_pth = store_file.split('/')[:-1]
+            pth = '/'.join(out_pth) + '/'
+            if os.path.exists(pth) is False : 
+                os.makedirs(pth)
+            np.savez(store_file, voxel_label=voxel_label, xyz_label=xyz_label.numpy(),
+                    colors=colors, query=query.numpy(), xyz_center=xyz_center.numpy(),voxel_colors=voxel_colors,invalid=invalid,cur_f=store_file)
+            #self.test_samples.append([voxel_label,query,xyz_label,xyz_center,cur_f,invalid])
             idx += 1
 
     def __len__(self):
@@ -225,3 +251,4 @@ def flip(voxel, invalid, flip_dim=0):
 
 if __name__ == '__main__':
     dataset = KITTI360()
+    dataset.create_format()
