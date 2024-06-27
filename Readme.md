@@ -1,5 +1,5 @@
 <h1 align=center>
-SemCity: Semantic Scene Generation 
+SemCityRGB: Voxel Based Semantic and RGB Scene Generation 
 
 with Triplane Diffusion
 </h1>
