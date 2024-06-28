@@ -198,7 +198,7 @@ class KITTI360(data.Dataset):
                 xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
                 colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
                 remapped_labels.append(xyzlabel)
-                remapped_colors.append(colors)
+                remapped_colors.append(colors.reshape(-1,3))
 
             pt_number = voxel_centers.shape[0]
             num_far_free = self.max_points - pt_number
@@ -210,13 +210,13 @@ class KITTI360(data.Dataset):
                 idx = torch.randperm(xyzlabel.shape[0])
                 xyzlabel = xyzlabel[idx][:min(xyzlabel.shape[0], num_far_free)]
                 remapped_labels.append(xyzlabel)
-                remapped_colors.append(colors)
+                remapped_colors.append(colors.reshape(-1,3))
                 while len(torch.cat(remapped_labels, dim=0)) < self.max_points:
                     for i in range(1, self.num_class):
                         xyz = torch.nonzero(torch.Tensor(
                             voxel_label) == i, as_tuple=False)
                         colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
-                        remapped_colors.append(colors)
+                        remapped_colors.append(colors.reshape(-1,3))
                         xyzlabel = torch.nn.functional.pad(
                             xyz, (1, 0), 'constant', value=i)
                         remapped_labels.append(xyzlabel)
