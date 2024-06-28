@@ -94,6 +94,19 @@ def color_point_cloud_by_labels(point_cloud, labels):
 class KITTI360(data.Dataset):
     def __init__(self, imageset='train', get_query=True,num_class=20):
         self.num_class = num_class
+        self.base_folder = '/media/cedric/Datasets2/KITTI_360/semcity_format/'
+        self.subfolders = os.listdir(self.base_folder)
+        self.subfolders = [folder for folder in self.subfolders if os.path.isdir(
+            self.base_folder + folder)]
+        self.im_idx = []
+        complt_num_per_class= np.asarray([1]*20)
+        compl_labelweights = complt_num_per_class / np.sum(complt_num_per_class)
+        self.weights = torch.Tensor(np.power(np.amax(compl_labelweights) / compl_labelweights, 1 / 3.0)).cuda()
+        for folder in self.subfolders:
+            fs = os.listdir(self.base_folder + folder)
+            for f in fs:
+                if f.endswith('aligned.npz'):
+                    self.im_idx.append(self.base_folder + folder + '/' + f)
 
 
     def create_format(self):
@@ -230,18 +243,24 @@ class KITTI360(data.Dataset):
             if os.path.exists(pth) is False : 
                 os.makedirs(pth)
             np.savez(store_file, voxel_label=voxel_label, xyz_label=xyz_label.numpy(),
-                    colors=colors, query=query.numpy(), xyz_center=xyz_center.numpy(),voxel_colors=voxel_colors,invalid=invalid,cur_f=store_file)
+                    colors=colors, query=query.numpy(), xyz_center=xyz_center.numpy(),voxel_colors=voxel_colors,invalid=invalid.numpy(),cur_f=store_file)
+            class_weights_file = '/media/cedric/Datasets2/KITTI_360/semcity_format/class_weights.npz'
+            np.savez(class_weights_file,class_weights=complt_num_per_class)
             #self.test_samples.append([voxel_label,query,xyz_label,xyz_center,cur_f,invalid])
             idx += 1
 
     def __len__(self):
         'Denotes the total number of samples'
-        return len(self.test_samples)
+        return len(self.im_idx)
 
     def __getitem__(self, index):
-        voxel_label, query,xyz_label, xyz_center,f_name,invalid = self.test_samples[0]
+        data = np.load(self.im_idx[index])
+        
+        voxel_label, query,xyz_label, xyz_center,f_name,invalid = data['voxel_label'],data['query'],data['xyz_label'],data['xyz_center'],data['cur_f'],data['invalid']
+        colors = data['colors']
+        voxel_colors = data['voxel_colors']
 
-        return voxel_label,query,xyz_label,xyz_center,f_name,invalid
+        return torch.from_numpy(voxel_label),torch.from_numpy(query),torch.from_numpy(xyz_label),torch.from_numpy(xyz_center),self.im_idx[index],torch.from_numpy(invalid)
 
 def flip(voxel, invalid, flip_dim=0):
     voxel = np.flip(voxel, axis=flip_dim).copy()
