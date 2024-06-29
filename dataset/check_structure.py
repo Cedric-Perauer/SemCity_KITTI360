@@ -56,6 +56,7 @@ def get_query(voxel_label, num_class=20, grid_size=(256, 256, 32), max_points=40
         xyz = torch.nonzero(torch.Tensor(voxel_label) == i, as_tuple=False)
         xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
         xyzl.append(xyzlabel)
+    import pdb; pdb.set_trace()
     tdf = compute_tdf(voxel_label, trunc_distance=2)
     xyz = torch.nonzero(torch.tensor(
         np.logical_and(tdf > 0, tdf <= 2)), as_tuple=False)
@@ -67,9 +68,12 @@ def get_query(voxel_label, num_class=20, grid_size=(256, 256, 32), max_points=40
         xyzl = torch.cat(xyzl, dim=0)
         xyzl = xyzl[:max_points]
     else:
+        print(xyzlabel.shape)
         xyz = torch.nonzero(torch.tensor(np.logical_and(
             voxel_label == 0, tdf == -1)), as_tuple=False)
+        print(xyz.shape)
         xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=0)
+        print(xyzlabel.shape)
         idx = torch.randperm(xyzlabel.shape[0])
         xyzlabel = xyzlabel[idx][:min(xyzlabel.shape[0], num_far_free)]
         xyzl.append(xyzlabel)
@@ -162,6 +166,7 @@ def point2voxel(preds, coords):
 
 
 query, xyz_label, xyz_center = get_query(voxel_label)
+import pdb; pdb.set_trace()
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(xyz_center[xyz_label != 0])
 pcd = color_point_cloud_by_labels(pcd, xyz_label[xyz_label != 0], semkittiyaml)

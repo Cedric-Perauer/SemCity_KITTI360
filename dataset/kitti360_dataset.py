@@ -7,6 +7,7 @@ import torch
 import pathlib
 import random
 from tqdm import tqdm
+import time
 
 
 remapping_dict = {
@@ -95,18 +96,35 @@ class KITTI360(data.Dataset):
     def __init__(self, imageset='train', get_query=True,num_class=20):
         self.num_class = num_class
         self.base_folder = '/media/cedric/Datasets2/KITTI_360/semcity_format/'
+        complt_num_per_class = np.load(self.base_folder + 'class_weights.npz')['class_weights']
+        idcs = np.where(complt_num_per_class == 0)
+        complt_num_per_class[idcs] = 1000 ### just a hack for now
         self.subfolders = os.listdir(self.base_folder)
         self.subfolders = [folder for folder in self.subfolders if os.path.isdir(
             self.base_folder + folder)]
         self.im_idx = []
-        complt_num_per_class= np.asarray([1]*20)
-        compl_labelweights = complt_num_per_class / np.sum(complt_num_per_class)
-        self.weights = torch.Tensor(np.power(np.amax(compl_labelweights) / compl_labelweights, 1 / 3.0)).cuda()
         for folder in self.subfolders:
             fs = os.listdir(self.base_folder + folder)
             for f in fs:
                 if f.endswith('aligned.npz'):
                     self.im_idx.append(self.base_folder + folder + '/' + f)
+        
+                    
+        if imageset == 'train':
+            compl_labelweights = complt_num_per_class / np.sum(complt_num_per_class)
+            self.weights = torch.Tensor(np.power(np.amax(compl_labelweights) / compl_labelweights, 1 / 3.0)).cuda()
+            self.im_idx = self.im_idx[:int(0.8*len(self.im_idx))]
+        elif imageset == 'val':
+            self.im_idx = self.im_idx[int(0.8*len(self.im_idx)):int(0.9*len(self.im_idx))]
+            self.weights = torch.Tensor(np.ones(20) * 3).cuda()
+            self.weights[0] = 1
+        elif imageset == 'test' : 
+            self.im_idx = self.im_idx[int(0.9*len(self.im_idx)):]
+            self.weights = torch.Tensor(np.ones(20) * 3).cuda()
+            self.weights[0] = 1
+        else : 
+            raise Exception("Split must be train/val/test split")
+            
 
 
     def create_format(self):
@@ -254,11 +272,19 @@ class KITTI360(data.Dataset):
         return len(self.im_idx)
 
     def __getitem__(self, index):
+        start = time.time()
         data = np.load(self.im_idx[index])
+        end = time.time() - start 
+        print('Loading time is ', end , " s")
+        
+        start = time.time()
+        
         
         voxel_label, query,xyz_label, xyz_center,f_name,invalid = data['voxel_label'],data['query'],data['xyz_label'],data['xyz_center'],data['cur_f'],data['invalid']
-        colors = data['colors']
-        voxel_colors = data['voxel_colors']
+        #colors = data['colors']
+        #voxel_colors = data['voxel_colors']
+        end = time.time() - start 
+        print('Data time is ', end , " s")
 
         return torch.from_numpy(voxel_label),torch.from_numpy(query),torch.from_numpy(xyz_label),torch.from_numpy(xyz_center),self.im_idx[index],torch.from_numpy(invalid)
 

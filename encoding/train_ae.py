@@ -9,6 +9,8 @@ from tqdm.auto import tqdm
 from torch.cuda.amp import autocast, GradScaler
 import numpy as np
 from encoding.ssc_metrics import SSCMetrics
+from dataset.kitti360_dataset import color_point_cloud_by_labels
+import open3d as o3d
 
 class Trainer:
     def __init__(self, args):
@@ -106,11 +108,25 @@ class Trainer:
             self.grad_scaler.update()
 
             # eval and log each iteration
-            if self.global_step % self.args.display_period == 0:
+            if self.global_step % 40 == 0:
                 pred_mask = get_pred_mask(model_output)
 
                 masks = torch.from_numpy(evaluator.get_eval_mask(vox.cpu().numpy(), invalid.cpu().numpy()))
                 output = point2voxel(self.args, pred_mask, coord)
+                '''
+                pcd = o3d.geometry.PointCloud()
+                non_zero_idcs = np.where(pred_mask[0].cpu().numpy() != 0)[0]
+                pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
+                pcd = color_point_cloud_by_labels(pcd,pred_mask[0].cpu().numpy()[non_zero_idcs])
+                o3d.visualization.draw_geometries([pcd])
+                
+                pcd = o3d.geometry.PointCloud()
+                non_zero_idcs = np.where(label[0].cpu().numpy() != 0)[0]
+                pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
+                pcd = color_point_cloud_by_labels(pcd,label[0].cpu().numpy()[non_zero_idcs])
+                o3d.visualization.draw_geometries([pcd])
+                '''
+                
                 eval_output = output[masks]
                 eval_label = vox[masks]
                 this_iou, this_miou = evaluator.addBatch(eval_output.cpu().numpy().astype(int), eval_label.cpu().numpy().astype(int))
