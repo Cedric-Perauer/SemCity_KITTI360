@@ -8,6 +8,7 @@ import pathlib
 import random
 from tqdm import tqdm
 import time
+import h5py
 
 
 remapping_dict = {
@@ -95,10 +96,11 @@ def color_point_cloud_by_labels(point_cloud, labels):
 class KITTI360(data.Dataset):
     def __init__(self, imageset='train', get_query=True,num_class=20):
         self.num_class = num_class
-        self.base_folder = '/media/cedric/Datasets2/KITTI_360/semcity_format/'
+        self.base_folder = '/media/cedric/Datasets2/KITTI_360/semcity_format2/'
         complt_num_per_class = np.load(self.base_folder + 'class_weights.npz')['class_weights']
         idcs = np.where(complt_num_per_class == 0)
         complt_num_per_class[idcs] = 1000 ### just a hack for now
+        self.max_points = 400000
         self.subfolders = os.listdir(self.base_folder)
         self.subfolders = [folder for folder in self.subfolders if os.path.isdir(
             self.base_folder + folder)]
@@ -106,7 +108,7 @@ class KITTI360(data.Dataset):
         for folder in self.subfolders:
             fs = os.listdir(self.base_folder + folder)
             for f in fs:
-                if f.endswith('aligned.npz'):
+                if f.endswith('aligned.h5'):
                     self.im_idx.append(self.base_folder + folder + '/' + f)
         print('imageset',imageset)
         
@@ -127,16 +129,6 @@ class KITTI360(data.Dataset):
             raise Exception("Split must be train/val/test split")
         
         print('len',len(self.im_idx))
-        self.arr = []
-        for index in tqdm(range(0,len(self.im_idx))):
-            data = np.load(self.im_idx[0])
-            voxel_label, query,xyz_label, xyz_center,f_name,invalid = data['voxel_label'],data['query'],data['xyz_label'],data['xyz_center'],data['cur_f'],data['invalid']
-            
-            colors = data['colors']
-            self.arr.append([voxel_label,xyz_center,xyz_label])
-            voxel_colors = data['voxel_colors']
-            #arr.append([voxel_label,xyz_center,xyz_label,voxel_colors,colors])
-
 
     def create_format(self):
         self.base_folder = '/media/cedric/Datasets2/KITTI_360/preprocessed/'
@@ -188,11 +180,7 @@ class KITTI360(data.Dataset):
                 [voxel.grid_index for voxel in voxel_grid.get_voxels()])
             voxel_colors = np.array(
                 [voxel.color for voxel in voxel_grid.get_voxels()])
-            voxel_centers = np.array([voxel_grid.origin + voxel.grid_index *
-                                     voxel_grid.voxel_size for voxel in voxel_grid.get_voxels()])
 
-            # Normalize voxel centers to be between -1 and 1
-            voxel_dim = np.array([256, 256, 32])
             # Initialize a dictionary to store semantic labels for each voxel
             voxel_semantics = {}
 
@@ -212,8 +200,6 @@ class KITTI360(data.Dataset):
                     set(label_list), key=label_list.count)
 
             # Print the results
-            remapped_labels = []
-            remapped_colors = []
             voxel_label = np.zeros([256, 256, 32], dtype=int)
             voxel_colors = np.zeros([256,256,32,3],dtype=float)
             voxels = voxel_grid.get_voxels()
@@ -222,89 +208,79 @@ class KITTI360(data.Dataset):
                 voxel_label[voxel_idx[0],voxel_idx[1],voxel_idx[2]] = cur_label
                 voxel_colors[voxel_idx[0],voxel_idx[1],voxel_idx[2]] = np.array(list(voxels[vox_idx].color))
 
-            for i in range(1, self.num_class):
-                xyz = torch.nonzero(torch.Tensor(voxel_label) == i, as_tuple=False)
-                xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
-                colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
-                remapped_labels.append(xyzlabel)
-                remapped_colors.append(colors.reshape(-1,3))
-
-            pt_number = voxel_centers.shape[0]
-            num_far_free = self.max_points - pt_number
-            ignore_count = self.max_points                                                                                                                                
-            if pt_number < self.max_points:
-                xyz = torch.nonzero(torch.from_numpy(voxel_label) == 0)
-                colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
-                xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=0)
-                idx = torch.randperm(xyzlabel.shape[0])
-                xyzlabel = xyzlabel[idx][:min(xyzlabel.shape[0], num_far_free)]
-                remapped_labels.append(xyzlabel)
-                remapped_colors.append(colors.reshape(-1,3))
-                while len(torch.cat(remapped_labels, dim=0)) < self.max_points:
-                    for i in range(1, self.num_class):
-                        xyz = torch.nonzero(torch.Tensor(
-                            voxel_label) == i, as_tuple=False)
-                        colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
-                        remapped_colors.append(colors.reshape(-1,3))
-                        xyzlabel = torch.nn.functional.pad(
-                            xyz, (1, 0), 'constant', value=i)
-                        remapped_labels.append(xyzlabel)
-                        num_cls = xyzlabel.shape[0]
-                        complt_num_per_class[i] += num_cls
-                        ignore_count -=  num_cls
-
-            complt_num_per_class[0] += ignore_count
-            remapped_labels = torch.cat(remapped_labels, dim=0)
-            remapped_labels = remapped_labels[:self.max_points]
-            remapped_colors = np.concatenate(remapped_colors, axis=0)
-
-            # Normalize voxel centers to be between -1 and 1
-            voxel_dim = np.array([256, 256, 32])
-            query = (remapped_labels[:,1:] / (voxel_dim - 1)) * 2 - 1
-
-            xyz_label = remapped_labels[:,0]
-            xyz_center = remapped_labels[:,1:]
-            #colors = voxel_colors
-            invalid = torch.zeros_like(torch.from_numpy(voxel_label))
-            store_file = cur_f.replace('preprocessed','semcity_format')
+            store_file = cur_f.replace('preprocessed','semcity_format2')
             out_pth = store_file.split('/')[:-1]
             pth = '/'.join(out_pth) + '/'
-            if os.path.exists(pth) is False : 
+            if os.path.exists(pth) is False :
                 os.makedirs(pth)
-            np.savez(store_file, voxel_label=voxel_label, xyz_label=xyz_label.numpy(),
-                    colors=colors, query=query.numpy(), xyz_center=xyz_center.numpy(),voxel_colors=voxel_colors,invalid=invalid.numpy(),cur_f=store_file)
-            class_weights_file = '/media/cedric/Datasets2/KITTI_360/semcity_format/class_weights.npz'
-            np.savez(class_weights_file,class_weights=complt_num_per_class)
-            #self.test_samples.append([voxel_label,query,xyz_label,xyz_center,cur_f,invalid])
+            #np.savez(store_file, voxel_label=voxel_label,voxel_colors=voxel_colors,cur_f=store_file)
+            file = h5py.File(store_file.replace('npz','h5'), 'w')
+            file.create_dataset('voxel_label', data=voxel_label)
+            file.create_dataset('voxel_colors', data=voxel_colors)
+            file.close()
             idx += 1
+            if idx == 20 :
+                break
 
     def __len__(self):
         'Denotes the total number of samples'
         return len(self.im_idx)
 
     def __getitem__(self, index):
-        '''
         start = time.time()
-        data = np.load(self.im_idx[index])
-        end = time.time() - start 
-        print('Loading time is ', end , " s")
+        print(f"Loading data from index: {index}")
+        print(self.im_idx[index])
+        with h5py.File(self.im_idx[index], "r") as data:
+            print("Keys: %s" % data.keys())
+            voxel_colors = data['voxel_colors'][:]
+            voxel_label = data['voxel_label'][:]
+
+        remapped_colors = []
+        remapped_labels = []
         
-        start = time.time()
+        for i in range(1, self.num_class):
+            xyz = torch.nonzero(torch.Tensor(voxel_label) == i, as_tuple=False)
+            xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
+            colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
+            remapped_labels.append(xyzlabel)
+            remapped_colors.append(colors.reshape(-1,3))
         
+        pt_number = voxel_colors.shape[0]
+        num_far_free = self.max_points - pt_number
+        if pt_number < self.max_points:
+            xyz = torch.nonzero(torch.from_numpy(voxel_label) == 0)
+            colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
+            xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=0)
+            idx = torch.randperm(xyzlabel.shape[0])
+            xyzlabel = xyzlabel[idx][:min(xyzlabel.shape[0], num_far_free)]
+            remapped_labels.append(xyzlabel)
+            remapped_colors.append(colors.reshape(-1,3))
+            while len(torch.cat(remapped_labels, dim=0)) < self.max_points:
+                for i in range(1, self.num_class):
+                    xyz = torch.nonzero(torch.Tensor(voxel_label) == i, as_tuple=False)
+                    colors = voxel_colors[xyz[:,0],xyz[:,1],xyz[:,2]]
+                    remapped_colors.append(colors.reshape(-1,3))
+                    xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
+                    remapped_labels.append(xyzlabel)
         
-        voxel_label, query,xyz_label, xyz_center,f_name,invalid = data['voxel_label'],data['query'],data['xyz_label'],data['xyz_center'],data['cur_f'],data['invalid']
-        #colors = data['colors']
-        #voxel_colors = data['voxel_colors']
-        end = time.time() - start 
-        print('Data time is ', end , " s")
-        '''
-        voxel_label,xyz_center, xyz_label = self.arr[index]
+        remapped_labels = torch.cat(remapped_labels, dim=0)
+        remapped_labels = remapped_labels[:self.max_points]
+        remapped_colors = np.concatenate(remapped_colors, axis=0)
+        
         voxel_dim = np.array([256, 256, 32])
-        query = (xyz_center / (voxel_dim - 1)) * 2 - 1
+        query = (remapped_labels[:,1:] / (voxel_dim - 1)) * 2 - 1
+        
+        xyz_label = remapped_labels[:,0]
+        xyz_center = remapped_labels[:,1:]
         invalid = torch.zeros_like(torch.from_numpy(voxel_label))
-
-
-        return torch.from_numpy(voxel_label),torch.from_numpy(query),torch.from_numpy(xyz_label),torch.from_numpy(xyz_center),self.im_idx[index],invalid
+        
+        del remapped_colors, remapped_labels
+        
+        end = time.time() - start
+        print(f"Time taken: {end * 1000} ms")
+        
+        return voxel_label, query, xyz_label, xyz_center, self.im_idx[index], invalid
+     
 
 def flip(voxel, invalid, flip_dim=0):
     voxel = np.flip(voxel, axis=flip_dim).copy()
@@ -314,4 +290,4 @@ def flip(voxel, invalid, flip_dim=0):
 
 if __name__ == '__main__':
     dataset = KITTI360()
-    #dataset.create_format()
+    dataset.create_format()
