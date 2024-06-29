@@ -58,7 +58,7 @@ class SemKITTI(data.Dataset):
                         self.im_idx.append(str(filename))
                 else : 
                     self.im_idx.append(str(filename))
-                
+    
     def unpack(self, compressed):
         ''' given a bit encoded voxel grid, make a normal voxel grid out of it.  '''
         uncompressed = np.zeros(compressed.shape[0] * 8, dtype=np.uint8)

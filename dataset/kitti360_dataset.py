@@ -108,6 +108,7 @@ class KITTI360(data.Dataset):
             for f in fs:
                 if f.endswith('aligned.npz'):
                     self.im_idx.append(self.base_folder + folder + '/' + f)
+        print('imageset',imageset)
         
                     
         if imageset == 'train':
@@ -124,7 +125,17 @@ class KITTI360(data.Dataset):
             self.weights[0] = 1
         else : 
             raise Exception("Split must be train/val/test split")
+        
+        print('len',len(self.im_idx))
+        self.arr = []
+        for index in tqdm(range(0,len(self.im_idx))):
+            data = np.load(self.im_idx[0])
+            voxel_label, query,xyz_label, xyz_center,f_name,invalid = data['voxel_label'],data['query'],data['xyz_label'],data['xyz_center'],data['cur_f'],data['invalid']
             
+            colors = data['colors']
+            self.arr.append([voxel_label,xyz_center,xyz_label])
+            voxel_colors = data['voxel_colors']
+            #arr.append([voxel_label,xyz_center,xyz_label,voxel_colors,colors])
 
 
     def create_format(self):
@@ -272,6 +283,7 @@ class KITTI360(data.Dataset):
         return len(self.im_idx)
 
     def __getitem__(self, index):
+        '''
         start = time.time()
         data = np.load(self.im_idx[index])
         end = time.time() - start 
@@ -285,8 +297,14 @@ class KITTI360(data.Dataset):
         #voxel_colors = data['voxel_colors']
         end = time.time() - start 
         print('Data time is ', end , " s")
+        '''
+        voxel_label,xyz_center, xyz_label = self.arr[index]
+        voxel_dim = np.array([256, 256, 32])
+        query = (xyz_center / (voxel_dim - 1)) * 2 - 1
+        invalid = torch.zeros_like(torch.from_numpy(voxel_label))
 
-        return torch.from_numpy(voxel_label),torch.from_numpy(query),torch.from_numpy(xyz_label),torch.from_numpy(xyz_center),self.im_idx[index],torch.from_numpy(invalid)
+
+        return torch.from_numpy(voxel_label),torch.from_numpy(query),torch.from_numpy(xyz_label),torch.from_numpy(xyz_center),self.im_idx[index],invalid
 
 def flip(voxel, invalid, flip_dim=0):
     voxel = np.flip(voxel, axis=flip_dim).copy()
@@ -296,4 +314,4 @@ def flip(voxel, invalid, flip_dim=0):
 
 if __name__ == '__main__':
     dataset = KITTI360()
-    dataset.create_format()
+    #dataset.create_format()

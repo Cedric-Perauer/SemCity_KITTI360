@@ -23,7 +23,7 @@ def dataset_builder(args):
         
     elif args.dataset == 'kitti360':
         dataset = KITTI360()
-        val_dataset = KITTI360()
+        val_dataset = KITTI360('val')
         args.num_class = 20
         args.grid_size = [256,256,32]
         class_names = [
