@@ -23,8 +23,8 @@ class Trainer:
 
         # dataset
         self.train_dataset, self.val_dataset, self.num_class, class_names = dataset_builder(args)
-        self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=args.bs, shuffle=True, num_workers=8, pin_memory=True)
-        self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=1, shuffle=False, num_workers=8, pin_memory=True)
+        self.train_dataloader = torch.utils.data.DataLoader(self.train_dataset, batch_size=1, shuffle=True, num_workers=0, pin_memory=False)
+        self.val_dataloader = torch.utils.data.DataLoader(self.val_dataset, batch_size=1, shuffle=False, num_workers=0, pin_memory=False)
         self.iou_class_names = class_names
 
         # model & optimizer
