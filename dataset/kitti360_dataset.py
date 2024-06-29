@@ -108,7 +108,7 @@ class KITTI360(data.Dataset):
         for folder in self.subfolders:
             fs = os.listdir(self.base_folder + folder)
             for f in fs:
-                if f.endswith('aligned.h5'):
+                if f.endswith('.h5'):
                     self.im_idx.append(self.base_folder + folder + '/' + f)
         print('imageset',imageset)
         
@@ -140,7 +140,7 @@ class KITTI360(data.Dataset):
         self.num_class = self.num_class
         #self.weights = torch.Tensor(np.power(np.amax(compl_labelweights) / compl_labelweights, 1 / 3.0)).cuda()
         self.min_dim = 10000000
-        self.max_points = 400000
+        removed = 0 
         
         complt_num_per_class= np.asarray([0]*20)
         for folder in self.subfolders:
@@ -174,7 +174,14 @@ class KITTI360(data.Dataset):
             voxel_size = 0.15
             voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(
                 pcd, voxel_size)
-
+    
+            
+            num_pts = np.asarray(pcd.points).shape[0]
+            if num_pts == 0 : 
+                removed += 1
+                print("continue",removed)
+                
+                continue 
             # Extract voxel indices and centers
             voxel_indices = np.array(
                 [voxel.grid_index for voxel in voxel_grid.get_voxels()])
@@ -200,27 +207,30 @@ class KITTI360(data.Dataset):
                     set(label_list), key=label_list.count)
 
             # Print the results
+            store_file = cur_f.replace('preprocessed','semcity_format2')
             voxel_label = np.zeros([256, 256, 32], dtype=int)
             voxel_colors = np.zeros([256,256,32,3],dtype=float)
             voxels = voxel_grid.get_voxels()
+            start = time.time()
+            
             for vox_idx,voxel_idx in enumerate(voxel_indices):
                 cur_label = remapping_dict[voxel_labels[(voxel_idx[0],voxel_idx[1],voxel_idx[2])]]
                 voxel_label[voxel_idx[0],voxel_idx[1],voxel_idx[2]] = cur_label
                 voxel_colors[voxel_idx[0],voxel_idx[1],voxel_idx[2]] = np.array(list(voxels[vox_idx].color))
 
-            store_file = cur_f.replace('preprocessed','semcity_format2')
+            end = time.time() - start
+
+            
             out_pth = store_file.split('/')[:-1]
             pth = '/'.join(out_pth) + '/'
             if os.path.exists(pth) is False :
                 os.makedirs(pth)
             #np.savez(store_file, voxel_label=voxel_label,voxel_colors=voxel_colors,cur_f=store_file)
             file = h5py.File(store_file.replace('npz','h5'), 'w')
-            file.create_dataset('voxel_label', data=voxel_label)
-            file.create_dataset('voxel_colors', data=voxel_colors)
+            file.create_dataset('voxel_label', data=voxel_label.flatten())
+            file.create_dataset('voxel_colors', data=voxel_colors.flatten())
             file.close()
             idx += 1
-            if idx == 20 :
-                break
 
     def __len__(self):
         'Denotes the total number of samples'
@@ -232,8 +242,8 @@ class KITTI360(data.Dataset):
         print(self.im_idx[index])
         with h5py.File(self.im_idx[index], "r") as data:
             print("Keys: %s" % data.keys())
-            voxel_colors = data['voxel_colors'][:]
-            voxel_label = data['voxel_label'][:]
+            voxel_colors = data['voxel_colors'][:].reshape((256,256,32,3))
+            voxel_label = data['voxel_label'][:].reshape((256,256,32))
 
         remapped_colors = []
         remapped_labels = []
