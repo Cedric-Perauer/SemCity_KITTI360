@@ -238,10 +238,7 @@ class KITTI360(data.Dataset):
 
     def __getitem__(self, index):
         start = time.time()
-        print(f"Loading data from index: {index}")
-        print(self.im_idx[index])
         with h5py.File(self.im_idx[index], "r") as data:
-            print("Keys: %s" % data.keys())
             voxel_colors = data['voxel_colors'][:].reshape((256,256,32,3))
             voxel_label = data['voxel_label'][:].reshape((256,256,32))
 
@@ -287,7 +284,6 @@ class KITTI360(data.Dataset):
         del remapped_colors, remapped_labels
         
         end = time.time() - start
-        print(f"Time taken: {end * 1000} ms")
         
         return voxel_label, query, xyz_label, xyz_center, self.im_idx[index], invalid
      
