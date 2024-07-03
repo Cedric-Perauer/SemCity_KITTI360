@@ -9,7 +9,7 @@ def get_args():
     parser.add_argument("--mlp_hidden_channels", type=int, default=256, help="mlp hidden dimension")
     parser.add_argument("--mlp_hidden_layers", type=int, default=4, help="mlp hidden layers")
     parser.add_argument("--padding_mode", default='replicate')
-    parser.add_argument("--bs", type=int, default=4, help="batch size for autoencoding training")
+    parser.add_argument("--bs", type=int, default=1, help="batch size for autoencoding training")
     parser.add_argument("--dataset", default='kitti', choices=['kitti', 'carla','kitti360'])
     parser.add_argument("--z_down", default=False)
 
@@ -39,6 +39,8 @@ def main():
     elif args.dataset == 'kitti':
         args.data_path=SEMKITTI_DATA_PATH
         args.yaml_path=SEMKITTI_YAML_PATH
+        
+    
     
     trainer = Trainer(args)
     trainer.train()

@@ -7,6 +7,7 @@ from tqdm.auto import tqdm
 import os
 from dataset.kitti_dataset import SemKITTI
 from dataset.carla_dataset import CarlaDataset
+from dataset.kitti360_dataset import KITTI360
 from dataset.path_manager import *
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def get_args():
     parser.add_argument("--padding_mode", default='replicate')
     parser.add_argument('--lovasz', type=bool, default=True)
 
-    parser.add_argument("--dataset", default='kitti', choices=['kitti', 'carla'])
+    parser.add_argument("--dataset", default='kitti', choices=['kitti', 'carla','kitti360'])
     parser.add_argument('--data_name', default='voxels')
     parser.add_argument('--data_tail', default='.label')
     parser.add_argument('--save_name', default='triplane')
@@ -45,6 +46,11 @@ def save(args):
         dataset = CarlaDataset(args, 'train', get_query=False)
         val_dataset = CarlaDataset(args, 'val', get_query=False)
         tri_size = (64, 64, 4) if args.z_down else (64, 64, 8)
+    
+    elif args.dataset == 'kitti360':
+        dataset = KITTI360('train')
+        val_dataset = KITTI360('val')
+        tri_size = (128, 128, 16) if args.z_down else (128, 128, 32)
         
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)  #collate_fn=dataset.collate_fn, num_workers=4)
     val_dataloader = torch.utils.data.DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)  #collate_fn=dataset.collate_fn, num_workers=4)
@@ -88,6 +94,10 @@ def main():
         args.data_path=CARLA_DATA_PATH
         args.save_path=CARLA_DATA_PATH
         args.yaml_path=CARLA_YAML_PATH
+    elif args.dataset == 'kitti360':
+        args.num_class = 20
+        args.save_path='/media/cedric/Datasets2/KITTI_360/'
+    
     save(args)
     
 if __name__ == '__main__':
