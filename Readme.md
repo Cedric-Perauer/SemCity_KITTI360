@@ -15,6 +15,9 @@ with Triplane Diffusion
 ## 📌 Setup
 We test our code on Ubuntu 20.04 with a single RTX 3090 or 4090 GPU.
 
+### Weights Storage
+[Here](https://drive.google.com/drive/u/0/folders/1C2bhRybIoKLAA_pwVa4ti1PPaMwzwdUF)
+
 ### Environment 
 
     git clone https://github.com/zoomin-lee/SemCity.git
