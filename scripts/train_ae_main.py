@@ -40,8 +40,6 @@ def main():
         args.data_path=SEMKITTI_DATA_PATH
         args.yaml_path=SEMKITTI_YAML_PATH
         
-    
-    
     trainer = Trainer(args)
     trainer.train()
 

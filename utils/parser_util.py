@@ -78,7 +78,7 @@ def add_in_out_sampling(parser):
 
 
 def get_gen_args(args):
-    if args.dataset == 'kitti' :
+    if args.dataset == 'kitti' or args.dataset == 'kitti360':
         if args.z_down : H, W, D = 128 ,128, 16 
         else : H, W, D = 128, 128, 32
         learning_map, learning_map_inv = read_semantickitti_yaml()

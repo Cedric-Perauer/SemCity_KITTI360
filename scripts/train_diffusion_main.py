@@ -59,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument("--ssc_refine_dataset", default='monoscene', choices=['monoscene', 'occdepth', 'scpnet', 'ssasc'])
     
     parser.add_argument("--dataset", default='kitti', choices=['kitti', 'carla', 'kitti360'])
-    parser.add_argument("--batch_size", type=int, default=16, help="batch size for diffusion training")
+    parser.add_argument("--batch_size", type=int, default=2, help="batch size for diffusion training")
     parser.add_argument("--resume_checkpoint", type=str, default = None)
     parser.add_argument("--triplane_loss_type", type=str, default='l2', choices=['l1', 'l2'])
     
@@ -76,6 +76,11 @@ if __name__ == '__main__':
     elif args.dataset == 'kitti':
         args.data_path=SEMKITTI_DATA_PATH
         args.yaml_path=SEMKITTI_YAML_PATH
+    
+    elif args.dataset == 'kitti360':
+        args.yaml_path=SEMKITTI_YAML_PATH
+        args.data_path='/media/cedric/Datasets2/KITTI_360/semcity_format2/'
+
     
     if args.voxel_fea :
         args.diff_net_type = "unet_voxel"
