@@ -28,15 +28,22 @@ class TriplaneDataset(torch.utils.data.Dataset):
             elif args.diff_net_type == 'unet_bev':
                 tri_path = os.path.join(args.data_path, folder, 'bev')
             else : 
-                tri_path = os.path.join(args.data_path, folder, 'triplane')    
+                if args.dataset != 'kitti360':
+                    tri_path = os.path.join(args.data_path, folder,'triplane')   
+                else : 
+                    tri_path = os.path.join(args.data_path,'triplane/') 
                     
-            files = list(pathlib.Path(tri_path).glob('??????.npy'))
-           
-            for filename in files:
-                if imageset == 'val':
-                    if (int(str(filename).split('/')[-1].split('.')[0].split("_")[0]) % 5 == 0) :
-                        self.im_idx.append(str(filename))
-                else : self.im_idx.append(str(filename))
+            if args.dataset != 'kitti360':
+                files = list(pathlib.Path(tri_path).glob('??????.npy'))
+                for filename in files:
+                    if imageset == 'val':
+                        if (int(str(filename).split('/')[-1].split('.')[0].split("_")[0]) % 5 == 0) :
+                            self.im_idx.append(str(filename))
+                    else : self.im_idx.append(str(filename))
+            else : 
+                files = [tri_path + f for f in os.listdir(tri_path) if f.endswith('.npy')]
+                for filename in files : 
+                    self.im_idx.append(str(filename))
 
         if imageset == 'val':
             self.im_idx = sorted(self.im_idx)

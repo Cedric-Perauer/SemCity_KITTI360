@@ -59,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument("--ssc_refine_dataset", default='monoscene', choices=['monoscene', 'occdepth', 'scpnet', 'ssasc'])
     
     parser.add_argument("--dataset", default='kitti', choices=['kitti', 'carla', 'kitti360'])
-    parser.add_argument("--batch_size", type=int, default=2, help="batch size for diffusion training")
+    parser.add_argument("--batch_size", type=int, default=8, help="batch size for diffusion training")
     parser.add_argument("--resume_checkpoint", type=str, default = None)
     parser.add_argument("--triplane_loss_type", type=str, default='l2', choices=['l1', 'l2'])
     
