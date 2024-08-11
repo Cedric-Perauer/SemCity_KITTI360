@@ -62,7 +62,7 @@ class Trainer:
 
     def _loss(self, vox, query, label, losses, coord):
         empty_label = 0.
-        preds = self.model(vox, query) # [bs, N, 20]
+        preds, rgb = self.model(vox, query) # [bs, N, 20]
         losses['ce'] = self.loss_fns['ce'](preds.view(-1, self.num_class), label.view(-1,))
         losses['loss'] = losses['ce']
         
@@ -129,17 +129,12 @@ class Trainer:
                 
                 
                 ##colors visualization
-                '''
+                
                 pcd = o3d.geometry.PointCloud()
                 non_zero_idcs = np.where(label[0].cpu().numpy() != 0)[0]
                 pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
-                pcd.colors = o3d.utility.Vector3dVector(rgbs[0].cpu().numpy()[non_zero_idcs])
+                pcd.colors = o3d.utility.Vector3dVector(rgbs[0].cpu().numpy()[non_zero_idcs] /255.)
                 o3d.visualization.draw_geometries([pcd])
-                '''
-                
-                
-                
-                
                 
                 eval_output = output[masks]
                 eval_label = vox[masks]

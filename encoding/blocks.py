@@ -68,6 +68,36 @@ class DecoderMLPSkipConcat(nn.Module):
         h = torch.cat([x, h], dim=-1)
         h = self.second_layers(h)
         return h
+        
+class DecoderMLPSkipConcatRGB(nn.Module):
+    def __init__(self, in_channels, out_channels, hidden_channels, num_hidden_layers, posenc=0) -> None:
+        super().__init__()
+        self.posenc = posenc
+        if posenc > 0:
+            self.PE = SinusoidalEncoder(in_channels, 0, posenc, use_identity=True)
+            in_channels = self.PE.latent_dim
+        first_layer_list = [nn.Linear(in_channels, hidden_channels), nn.ReLU()]
+        for _ in range(num_hidden_layers // 2):
+            first_layer_list.append(nn.Linear(hidden_channels, hidden_channels))
+            first_layer_list.append(nn.ReLU())
+        self.first_layers = nn.Sequential(*first_layer_list)
+        
+        second_layer_list = [nn.Linear(in_channels + hidden_channels, hidden_channels), nn.ReLU()]
+        for _ in range(num_hidden_layers // 2 - 1):
+            second_layer_list.append(nn.Linear(hidden_channels, hidden_channels))
+            second_layer_list.append(nn.ReLU())
+        second_layer_list.append(nn.Linear(hidden_channels, out_channels))
+        self.second_layers = nn.Sequential(*second_layer_list)
+    
+    def forward(self, x):
+        if self.posenc > 0:
+            x = self.PE(x)
+        h = self.first_layers(x)
+        h = torch.cat([x, h], dim=-1)
+        h = self.second_layers(h)
+        return h
+
+
 
 
 class SiLU(nn.Module):

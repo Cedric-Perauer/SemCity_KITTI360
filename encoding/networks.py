@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from encoding.blocks import TriplaneGroupResnetBlock, BeVplaneGroupResnetBlock, DecoderMLPSkipConcat
+from encoding.blocks import TriplaneGroupResnetBlock, BeVplaneGroupResnetBlock, DecoderMLPSkipConcat, DecoderMLPSkipConcatRGB
 
 class Encoder(nn.Module):
     def __init__(self, geo_feat_channels, z_down, padding_mode, kernel_size = (5, 5, 3), padding = (2, 2, 1)):
@@ -86,8 +86,10 @@ class AutoEncoderGroupSkip(nn.Module):
         print(f'build shared decoder... (PE: {self.pos})\n')
         if self.pos:
             self.geo_decoder = DecoderMLPSkipConcat(args.feat_channel_up+6*self.pos_num_freq, args.num_class, args.mlp_hidden_channels, args.mlp_hidden_layers)
+            self.rgb_decoder = DecoderMLPSkipConcatRGB(args.feat_channel_up+6*self.pos_num_freq,3, args.mlp_hidden_channels, args.mlp_hidden_layers)
         else:
             self.geo_decoder = DecoderMLPSkipConcat(args.feat_channel_up, args.num_class, args.mlp_hidden_channels, args.mlp_hidden_layers)
+            self.rgb_decoder = DecoderMLPSkipConcat(args.feat_channel_up, 3, args.mlp_hidden_channels, args.mlp_hidden_layers)
 
     def geo_parameters(self):
         return list(self.geo_encoder.parameters()) + list(self.geo_convs.parameters()) + list(self.geo_decoder.parameters())
@@ -136,7 +138,7 @@ class AutoEncoderGroupSkip(nn.Module):
         feat = feat.transpose(1, 2) # feat : [bs, N, C]
         return feat 
 
-    def decode(self, feat_maps, query):        
+    def decode(self, feat_maps, query,rgb_mode=False):        
         if self.args.voxel_fea:
             h_geo = self.geo_convs(feat_maps)
             h_geo = self.sample_feature_plane3D(h_geo, query)
@@ -165,10 +167,13 @@ class AutoEncoderGroupSkip(nn.Module):
 
             PE = torch.cat(PE, dim=-1)  # [bs, N, 6*self.pos_num_freq]
             h_geo = torch.cat([h_geo, PE], dim=-1)
-
-        h = self.geo_decoder(h_geo) # h : [bs, N, 1]
+        
+        if rgb_mode :
+            h = self.rgb_decoder(h_geo)
+        else :
+            h = self.geo_decoder(h_geo) # h : [bs, N, 1]
         return h
     
     def forward(self, vol, query):
         feat_map = self.encode(vol)
-        return self.decode(feat_map, query)
+        return self.decode(feat_map, query,False), self.decode(feat_map,query,True)

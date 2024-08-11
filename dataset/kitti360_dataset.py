@@ -238,8 +238,10 @@ class KITTI360(data.Dataset):
 
     def __getitem__(self, index):
         start = time.time()
+        index = 0
         with h5py.File(self.im_idx[index], "r") as data:
-            voxel_colors = data['voxel_colors'][:].reshape((256,256,32,3))
+            voxel_colors = data['voxel_colors'][:].reshape((256,256,32,3)) * 255.
+            voxel_colors = voxel_colors.astype(np.uint8)
             voxel_label = data['voxel_label'][:].reshape((256,256,32))
 
         remapped_colors = []
