@@ -271,7 +271,6 @@ class KITTI360(data.Dataset):
                     xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
                     remapped_labels.append(xyzlabel)
         
-        
         remapped_labels = torch.cat(remapped_labels, dim=0)
         remapped_labels = remapped_labels[:self.max_points]
         remapped_colors = np.concatenate(remapped_colors, axis=0)

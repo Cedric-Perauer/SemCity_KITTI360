@@ -90,7 +90,7 @@ class Trainer:
             vox = vox.type(torch.LongTensor).cuda()
             query = query.type(torch.FloatTensor).cuda()
             label = label.type(torch.LongTensor).cuda()
-            import pdb; pdb.set_trace()
+            #import pdb; pdb.set_trace()
             coord = coord.type(torch.LongTensor).cuda()
             invalid = invalid.type(torch.LongTensor).cuda()
             b_size = vox.size(0)  # TODO: bsize is correct?
@@ -114,19 +114,32 @@ class Trainer:
 
                 masks = torch.from_numpy(evaluator.get_eval_mask(vox.cpu().numpy(), invalid.cpu().numpy()))
                 output = point2voxel(self.args, pred_mask, coord)
-                '''
-                pcd = o3d.geometry.PointCloud()
-                non_zero_idcs = np.where(pred_mask[0].cpu().numpy() != 0)[0]
-                pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
-                pcd = color_point_cloud_by_labels(pcd,pred_mask[0].cpu().numpy()[non_zero_idcs])
-                o3d.visualization.draw_geometries([pcd])
                 
+                #pcd = o3d.geometry.PointCloud()
+                #non_zero_idcs = np.where(pred_mask[0].cpu().numpy() != 0)[0]
+                #pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
+                #pcd = color_point_cloud_by_labels(pcd,pred_mask[0].cpu().numpy()[non_zero_idcs])
+                #o3d.visualization.draw_geometries([pcd])
+                
+                #pcd = o3d.geometry.PointCloud()
+                #non_zero_idcs = np.where(label[0].cpu().numpy() != 0)[0]
+                #pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
+                #pcd = color_point_cloud_by_labels(pcd,label[0].cpu().numpy()[non_zero_idcs])
+                #o3d.visualization.draw_geometries([pcd])
+                
+                
+                ##colors visualization
+                '''
                 pcd = o3d.geometry.PointCloud()
                 non_zero_idcs = np.where(label[0].cpu().numpy() != 0)[0]
                 pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
-                pcd = color_point_cloud_by_labels(pcd,label[0].cpu().numpy()[non_zero_idcs])
+                pcd.colors = o3d.utility.Vector3dVector(rgbs[0].cpu().numpy()[non_zero_idcs])
                 o3d.visualization.draw_geometries([pcd])
                 '''
+                
+                
+                
+                
                 
                 eval_output = output[masks]
                 eval_label = vox[masks]
