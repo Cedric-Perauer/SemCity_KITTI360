@@ -86,10 +86,11 @@ class Trainer:
         evaluator = SSCMetrics(self.num_class, [])
         dataloader_tqdm = tqdm(self.train_dataloader)
 
-        for vox, query, label, coord, path, invalid in dataloader_tqdm:
+        for vox, query, label, coord, path, invalid,rgbs in dataloader_tqdm:
             vox = vox.type(torch.LongTensor).cuda()
             query = query.type(torch.FloatTensor).cuda()
             label = label.type(torch.LongTensor).cuda()
+            import pdb; pdb.set_trace()
             coord = coord.type(torch.LongTensor).cuda()
             invalid = invalid.type(torch.LongTensor).cuda()
             b_size = vox.size(0)  # TODO: bsize is correct?

@@ -261,7 +261,8 @@ class KITTI360(data.Dataset):
             idx = torch.randperm(xyzlabel.shape[0])
             xyzlabel = xyzlabel[idx][:min(xyzlabel.shape[0], num_far_free)]
             remapped_labels.append(xyzlabel)
-            remapped_colors.append(colors.reshape(-1,3))
+            cols_add = colors[:min(xyzlabel.shape[0], num_far_free)]
+            remapped_colors.append(cols_add.reshape(-1,3))
             while len(torch.cat(remapped_labels, dim=0)) < self.max_points:
                 for i in range(1, self.num_class):
                     xyz = torch.nonzero(torch.Tensor(voxel_label) == i, as_tuple=False)
@@ -270,9 +271,11 @@ class KITTI360(data.Dataset):
                     xyzlabel = torch.nn.functional.pad(xyz, (1, 0), 'constant', value=i)
                     remapped_labels.append(xyzlabel)
         
+        
         remapped_labels = torch.cat(remapped_labels, dim=0)
         remapped_labels = remapped_labels[:self.max_points]
         remapped_colors = np.concatenate(remapped_colors, axis=0)
+        remapped_colors = remapped_colors[:self.max_points]
         
         voxel_dim = np.array([256, 256, 32])
         query = (remapped_labels[:,1:] / (voxel_dim - 1)) * 2 - 1
@@ -281,11 +284,11 @@ class KITTI360(data.Dataset):
         xyz_center = remapped_labels[:,1:]
         invalid = torch.zeros_like(torch.from_numpy(voxel_label))
         
-        del remapped_colors, remapped_labels
+        #del remapped_colors, remapped_labels
         
         end = time.time() - start
         
-        return voxel_label, query, xyz_label, xyz_center, self.im_idx[index], invalid
+        return voxel_label, query, xyz_label, xyz_center, self.im_idx[index], invalid, remapped_colors
      
 
 def flip(voxel, invalid, flip_dim=0):
