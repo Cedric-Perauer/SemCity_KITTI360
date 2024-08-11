@@ -241,7 +241,6 @@ class KITTI360(data.Dataset):
         index = 0
         with h5py.File(self.im_idx[index], "r") as data:
             voxel_colors = data['voxel_colors'][:].reshape((256,256,32,3)) * 255.
-            voxel_colors = voxel_colors.astype(np.uint8)
             voxel_label = data['voxel_label'][:].reshape((256,256,32))
 
         remapped_colors = []
@@ -276,7 +275,7 @@ class KITTI360(data.Dataset):
         remapped_labels = torch.cat(remapped_labels, dim=0)
         remapped_labels = remapped_labels[:self.max_points]
         remapped_colors = np.concatenate(remapped_colors, axis=0)
-        remapped_colors = remapped_colors[:self.max_points]
+        remapped_colors = remapped_colors[:self.max_points] / 255.
         
         voxel_dim = np.array([256, 256, 32])
         query = (remapped_labels[:,1:] / (voxel_dim - 1)) * 2 - 1

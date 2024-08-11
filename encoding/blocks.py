@@ -95,7 +95,8 @@ class DecoderMLPSkipConcatRGB(nn.Module):
         h = self.first_layers(x)
         h = torch.cat([x, h], dim=-1)
         h = self.second_layers(h)
-        return h
+        out = torch.nn.functional.sigmoid(h) 
+        return out 
 
 
 

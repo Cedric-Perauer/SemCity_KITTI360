@@ -33,6 +33,7 @@ class Trainer:
         self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optimizer, args.lr_scheduler_steps, args.lr_scheduler_decay) if args.lr_scheduler else None
         self.grad_scaler = GradScaler()
         
+        
         if args.resume:
             checkpoint = torch.load(args.resume)
             self.model.load_state_dict(checkpoint['model'])
@@ -44,6 +45,7 @@ class Trainer:
         self.loss_fns = {}
         self.loss_fns['ce'] = torch.nn.CrossEntropyLoss(weight=self.train_dataset.weights, ignore_index=255)
         self.loss_fns['lovasz'] = None
+        self.rgb_loss = torch.nn.L1Loss(reduction='none')
 
     def train(self):
         for epoch in range(30000):
@@ -59,12 +61,22 @@ class Trainer:
             # learning rate scheduling
             self.scheduler.step()
             self.writer.add_scalar('lr_epochwise', self.optimizer.param_groups[0]['lr'], global_step=self.epoch)
+    
+    def _rgb_loss(self,gt_rgbs,pred_rgbs):
+        loss = self.rgb_loss(gt_rgbs,pred_rgbs)
+        loss = torch.sum(loss)
+        print('gt',gt_rgbs)
+        print('pred',pred_rgbs)
+        #import pdb; pdb.set_trace()
+        print("rgb loss",loss)
+        return loss
 
-    def _loss(self, vox, query, label, losses, coord):
+    def _loss(self, vox, query, label, losses, coord,gt_rgbs):
         empty_label = 0.
         preds, rgb = self.model(vox, query) # [bs, N, 20]
         losses['ce'] = self.loss_fns['ce'](preds.view(-1, self.num_class), label.view(-1,))
         losses['loss'] = losses['ce']
+        
         
         pred_output = torch.full((preds.shape[0], vox.shape[1], vox.shape[2], vox.shape[3], self.num_class), fill_value=empty_label, device=preds.device)
         gt_output = torch.full((preds.shape[0], vox.shape[1], vox.shape[2], vox.shape[3]), fill_value=empty_label, device=preds.device)
@@ -74,9 +86,11 @@ class Trainer:
             gt_output[i, coord[i, :, 0], coord[i, :, 1], coord[i, :, 2]] = label[i].float()
         losses['lovasz'] = lovasz_softmax(pred_output.permute(0,4,1,2,3), gt_output)
         losses['loss'] += losses['lovasz']
+        non_zero_idcs = np.where(label[0].cpu().numpy() != 0)[0]
+        losses['loss'] += self._rgb_loss(gt_rgbs[:,non_zero_idcs],rgb[:,non_zero_idcs])
 
         adaptive_weight = None
-        return losses, preds, adaptive_weight
+        return losses, preds, adaptive_weight, rgb
     
     def _train_model(self):
         self.model.train()
@@ -90,6 +104,8 @@ class Trainer:
             vox = vox.type(torch.LongTensor).cuda()
             query = query.type(torch.FloatTensor).cuda()
             label = label.type(torch.LongTensor).cuda()
+            rgbs  = rgbs.type(torch.FloatTensor).cuda()
+
             #import pdb; pdb.set_trace()
             coord = coord.type(torch.LongTensor).cuda()
             invalid = invalid.type(torch.LongTensor).cuda()
@@ -98,7 +114,7 @@ class Trainer:
             # forward
             losses = {}
             with autocast():
-                losses, model_output, adaptive_weight = self._loss(vox, query, label, losses, coord)
+                losses, model_output, adaptive_weight, pred_rgbs = self._loss(vox, query, label, losses, coord,rgbs)
 
             # optimize
             self.optimizer.zero_grad()
@@ -109,31 +125,35 @@ class Trainer:
             self.grad_scaler.update()
 
             # eval and log each iteration
-            if self.global_step % 40 == 0:
+            if self.global_step % 100 == 0:
                 pred_mask = get_pred_mask(model_output)
 
                 masks = torch.from_numpy(evaluator.get_eval_mask(vox.cpu().numpy(), invalid.cpu().numpy()))
                 output = point2voxel(self.args, pred_mask, coord)
                 
-                #pcd = o3d.geometry.PointCloud()
-                #non_zero_idcs = np.where(pred_mask[0].cpu().numpy() != 0)[0]
-                #pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
-                #pcd = color_point_cloud_by_labels(pcd,pred_mask[0].cpu().numpy()[non_zero_idcs])
-                #o3d.visualization.draw_geometries([pcd])
+                pcd = o3d.geometry.PointCloud()
+                non_zero_idcs = np.where(pred_mask[0].cpu().numpy() != 0)[0]
+                pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
+                pcd = color_point_cloud_by_labels(pcd,pred_mask[0].cpu().numpy()[non_zero_idcs])
+                o3d.visualization.draw_geometries([pcd])
                 
                 #pcd = o3d.geometry.PointCloud()
                 #non_zero_idcs = np.where(label[0].cpu().numpy() != 0)[0]
                 #pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
                 #pcd = color_point_cloud_by_labels(pcd,label[0].cpu().numpy()[non_zero_idcs])
                 #o3d.visualization.draw_geometries([pcd])
-                
-                
                 ##colors visualization
                 
                 pcd = o3d.geometry.PointCloud()
                 non_zero_idcs = np.where(label[0].cpu().numpy() != 0)[0]
                 pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
-                pcd.colors = o3d.utility.Vector3dVector(rgbs[0].cpu().numpy()[non_zero_idcs] /255.)
+                pcd.colors = o3d.utility.Vector3dVector(rgbs[0].cpu().numpy()[non_zero_idcs])
+                o3d.visualization.draw_geometries([pcd])
+                
+                pcd = o3d.geometry.PointCloud()
+                non_zero_idcs = np.where(label[0].cpu().numpy() != 0)[0]
+                pcd.points = o3d.utility.Vector3dVector(coord[0].cpu().numpy()[non_zero_idcs])
+                pcd.colors = o3d.utility.Vector3dVector(pred_rgbs[0].detach().cpu().numpy()[non_zero_idcs])
                 o3d.visualization.draw_geometries([pcd])
                 
                 eval_output = output[masks]
