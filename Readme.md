@@ -1,8 +1,11 @@
-<h1 align=center>
-SemCityRGB: Voxel Based Semantic and RGB Scene Generation 
+## Experiments training SemCity on Kitti360 dataset. 
 
-with Triplane Diffusion
-</h1>
+
+To use kitti360 it is sufficient to use ```--dataset kitti_360``` in all settings. 
+Due to issues in the original code of the authors, currently only the VAE training works well (similar to original version, achieving mIoU > 80%). Issues of the existing codebase on the diffusion model remain. 
+
+
+You can refer to the original code [here](https://github.com/zoomin-lee/SemCity).
 
 ![fig0](./figs/semcity.gif)
 
